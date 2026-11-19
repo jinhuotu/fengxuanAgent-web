@@ -1,0 +1,21 @@
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true,
+
+    /* 路径别名：TypeScript 要靠这里才知道 @ 指向 src，和 vite.config.ts 里的 alias 保持一致
+       注意：新版 TS 不再需要 baseUrl，paths 直接写相对于本文件的路径 */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"]
+}
