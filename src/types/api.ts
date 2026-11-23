@@ -24,3 +24,17 @@ export interface LoginData {
   /** 有效期，单位秒；后端 30 分钟 = 1800 */
   expires_in: number
 }
+
+/** 当前用户信息，对应后端 GET /auth/me 的 data */
+export interface UserInfo {
+  id: number
+  username: string
+  /** 显示名可空，前端展示时回退成 username */
+  display_name: string | null
+  /** active 正常，disabled 被停用 */
+  status: string
+  /** 是否管理员；阶段一暂时靠这一列决定谁能建用户 */
+  is_admin: boolean
+  /** 后端返回 ISO 字符串，目前是 UTC */
+  created_at: string
+}

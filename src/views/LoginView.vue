@@ -1,17 +1,19 @@
 <script setup lang="ts">
 /**
  * 登录页。
- * 三件事：表单校验、调接口拿 token、把 token 存进仓库。
+ * 四件事：表单校验、调接口拿 token、把 token 存进仓库、跳转到首页。
  * 注意错误提示不在这里弹——axios 拦截器已经统一弹过了，这里只负责恢复按钮状态。
  */
 
 import { type FormInstance, type FormRules, ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { login } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
@@ -29,9 +31,10 @@ const rules: FormRules = {
   ],
 }
 
-// 做什么：校验表单、请求登录接口、保存 token
+// 做什么：校验表单、请求登录接口、保存 token、跳到首页
 // 入参：无（读 form）
 // 返回：无；失败时提示已由拦截器弹出，这里只恢复按钮
+// 为什么先存 token 再跳转：首页的根路径分流依赖 getToken()，顺序反了会回到登录页
 async function handleSubmit(): Promise<void> {
   if (!formRef.value) return
 
@@ -43,6 +46,7 @@ async function handleSubmit(): Promise<void> {
     const data = await login({ username: form.username, password: form.password })
     authStore.setToken(data.access_token)
     ElMessage.success('登录成功')
+    router.push('/home')
   } catch {
     // 空 catch 是故意的：错误已经由 http 拦截器提示，这里不需要再处理
   } finally {
@@ -54,17 +58,8 @@ async function handleSubmit(): Promise<void> {
 <template>
   <div class="login-page">
     <el-card class="login-card">
-      <h1 class="title">风轩 Agent 平台</h1>
+      <h1 class="title">锋煊 Agent 平台</h1>
       <p class="subtitle">登录后才能进入问答与知识库</p>
-
-      <el-alert
-        class="hint"
-        type="info"
-        :closable="false"
-        show-icon
-        title="后端登录接口尚未实现，现在提交会提示 404"
-        description="等后端第 10 步完成 POST /auth/login 后即可真实登录"
-      />
 
       <el-form
         ref="formRef"
@@ -116,10 +111,6 @@ async function handleSubmit(): Promise<void> {
   margin: 0 0 16px;
   color: #909399;
   font-size: 13px;
-}
-
-.hint {
-  margin-bottom: 16px;
 }
 
 .submit {

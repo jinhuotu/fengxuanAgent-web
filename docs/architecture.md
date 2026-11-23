@@ -11,7 +11,7 @@ fengxuanAgent-web/                ✔ 已建 / □ 未建
 ├─ package-lock.json              ✔ 版本锁定，必须提交
 ├─ vite.config.ts                 ✔ 端口 5176、/api 代理、@ 别名
 ├─ tsconfig.app.json              ✔ 类型检查与 @ 路径映射
-├─ index.html                     ✔ 入口 HTML，标题"风轩 Agent 平台"
+├─ index.html                     ✔ 入口 HTML，标题"锋煊 Agent 平台"
 ├─ docs/                          ✔ 本文件与进度、命令、学习契约
 ├─ public/favicon.svg             ✔
 └─ src/
