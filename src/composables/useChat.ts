@@ -2,7 +2,7 @@
 import type { AxiosError } from 'axios'
 import { reactive } from 'vue'
 import { ChatRequestError, createChatSession, getChatSessions, interruptChat, streamChat } from '@/api/chat'
-import type { ChatEvent, ChatMessage, ChatSession } from '@/types/chat'
+import type { ChatEvent, ChatMessage, ChatReference, ChatSession } from '@/types/chat'
 import { getToken } from '@/utils/token'
 import { confirmRequest, createRecoveryState, latestRetryRequestId, submissionWasRejected, validateManualRetry } from '@/composables/chatRecovery'
 import { discardRejectedTurn, invalidateHistorySync, refreshConversationHistory } from '@/composables/chatHistory'
@@ -27,6 +27,7 @@ interface ActiveRequest {
 function createConversation(sessionId: number) {
   return {
     sessionId, messages: [] as ChatMessage[], draft: '', error: '', contextNotice: '',
+    references: [] as ChatReference[],
     historyPage: FIRST_PAGE, historyTotal: 0, historyVersion: 0,
     loadingHistory: false, syncingHistory: false, historySyncError: '', sending: false, active: null as ActiveRequest | null,
     ...createRecoveryState(),
@@ -201,6 +202,7 @@ function applyEvent(state: ChatState, conversation: ConversationState, active: A
   const assistant = findAssistant(conversation, active.requestId)
   if (!assistant) return
   if (event.event === 'context') conversation.contextNotice = event.payload.message
+  if (event.event === 'references') conversation.references = event.payload.items
   if (event.event === 'started') {
     assistant.id = event.payload.assistant_id
     state.tabSync?.notify(conversation.sessionId, active.requestId)
@@ -267,6 +269,7 @@ async function sendConversation(state: ChatState, conversation: ConversationStat
   conversation.ownsPendingRequest = true
   conversation.error = ''
   conversation.contextNotice = ''
+  conversation.references = []
   if (!retryOfRequestId || conversation.draft === content) conversation.draft = ''
   appendPendingMessages(conversation, active.requestId, content)
   try {

@@ -1,5 +1,5 @@
 /** SSE 解码只处理传输帧；不读取 token，不操作页面。 */
-import type { ChatEvent } from '@/types/chat'
+import type { ChatEvent, ChatReference } from '@/types/chat'
 
 const MAX_FRAME_CHARACTERS = 100000
 
@@ -16,6 +16,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validatedEvent(event: string, payload: unknown): ChatEvent {
   if (!isRecord(payload)) throw new Error('对话事件格式异常')
   if (event === 'context') return validatedContextNotice(payload)
+  if (event === 'references') return validatedReferences(payload)
   if (event === 'ping') return { event, payload: {} }
   if (event === 'delta' && typeof payload.content === 'string') return { event, payload: { content: payload.content } }
   if (event === 'started' && typeof payload.request_id === 'string' && typeof payload.assistant_id === 'number') {
@@ -42,6 +43,33 @@ function validatedContextNotice(payload: Record<string, unknown>): ChatEvent {
   if (payload.latest_round_omitted && payload.retained_rounds !== 0) throw new Error('对话上下文提示格式异常')
   return { event: 'context', payload: { message: payload.message, retained_rounds: payload.retained_rounds,
     latest_round_omitted: payload.latest_round_omitted } }
+}
+
+// 做什么：校验单条知识库引用，避免坏字段进入会话状态
+// 入参：未知的引用条目
+// 返回：合法时返回引用对象；字段缺失或类型不符时抛协议错误
+function validatedReference(item: unknown): ChatReference {
+  if (!isRecord(item) || typeof item.heading_path !== 'string') throw new Error('对话引用事件格式异常')
+  const numbers = ['index', 'chunk_id', 'document_id', 'char_start', 'char_end', 'score'] as const
+  const values = numbers.map((key) => item[key])
+  if (!values.every((value) => typeof value === 'number' && Number.isFinite(value))) {
+    throw new Error('对话引用事件格式异常')
+  }
+  const [index, chunkId, documentId, charStart, charEnd, score] = values as number[]
+  if (!Number.isInteger(index) || !Number.isInteger(chunkId) || !Number.isInteger(documentId) ||
+      !Number.isInteger(charStart) || !Number.isInteger(charEnd) || charEnd <= charStart) {
+    throw new Error('对话引用事件格式异常')
+  }
+  return { index, chunk_id: chunkId, document_id: documentId, heading_path: item.heading_path,
+    char_start: charStart, char_end: charEnd, score }
+}
+
+// 做什么：校验本轮知识库引用事件，只保留展示所需字段
+// 入参：引用事件的 JSON 对象
+// 返回：合法事件；items 不是数组或任一条不合法时抛协议错误
+function validatedReferences(payload: Record<string, unknown>): ChatEvent {
+  if (!Array.isArray(payload.items)) throw new Error('对话引用事件格式异常')
+  return { event: 'references', payload: { items: payload.items.map(validatedReference) } }
 }
 
 // 做什么：把一个完整 SSE 帧解析为已校验事件

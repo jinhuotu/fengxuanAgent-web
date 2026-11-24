@@ -10,6 +10,18 @@ export interface ChatSession {
   history_version: number
   active_request_id: string | null
   generation_expires_at: string | null
+  knowledge_base_id?: number | null
+}
+
+/** 本轮回答引用的知识库切片；字段与后端 references 事件对齐。 */
+export interface ChatReference {
+  index: number
+  chunk_id: number
+  document_id: number
+  heading_path: string
+  char_start: number
+  char_end: number
+  score: number
 }
 
 export interface ChatMessage {
@@ -47,6 +59,7 @@ export interface ChatRequestResult {
 
 export type ChatEvent =
   | { event: 'context'; payload: { message: string; retained_rounds: number; latest_round_omitted: boolean } }
+  | { event: 'references'; payload: { items: ChatReference[] } }
   | { event: 'started'; payload: { request_id: string; assistant_id: number } }
   | { event: 'delta'; payload: { content: string } }
   | { event: 'completed'; payload: { assistant_id: number; finish_reason: string } }

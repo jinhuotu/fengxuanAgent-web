@@ -77,3 +77,37 @@ test('bounds unterminated frame size', () => {
   assert.throws(() => append('z'.repeat(100001)), /长度限制/)
 })
 
+// 做什么：确认后端新增的知识库引用事件能被解码而不是当成未知事件抛错
+// 入参：无
+// 返回：事件顺序或引用字段缺失时失败
+test('decodes knowledge references before answer deltas', () => {
+  const events = []
+  const append = createEventDecoder(events.push.bind(events))
+  const item = { index: 1, chunk_id: 11, document_id: 4, heading_path: '并发控制 > 第1段',
+    char_start: 0, char_end: 90, score: 2.17 }
+  append(`event: references\ndata: ${JSON.stringify({ items: [item] })}\n\n`)
+  append('event: delta\ndata: {"content":"正常回答"}\n\n')
+  assert.equal(events[0].event, 'references')
+  assert.deepEqual(events[0].payload.items, [item])
+  assert.equal(events[1].event, 'delta')
+})
+
+// 做什么：拒绝引用条目缺失字段、非整数编号或偏移倒置
+// 入参：无
+// 返回：坏数据被接受时失败
+test('rejects invalid reference item fields', () => {
+  const good = { index: 1, chunk_id: 11, document_id: 4, heading_path: '并发控制 > 第1段',
+    char_start: 0, char_end: 90, score: 2.17 }
+  const payloads = [
+    { items: 'not-an-array' },
+    { items: [{ ...good, chunk_id: '11' }] },
+    { items: [{ ...good, index: 1.5 }] },
+    { items: [{ ...good, char_start: 90, char_end: 90 }] },
+    { items: [{ ...good, heading_path: 7 }] },
+  ]
+  for (const payload of payloads) {
+    const append = createEventDecoder(() => undefined)
+    assert.throws(() => append(`event: references\ndata: ${JSON.stringify(payload)}\n\n`), /格式异常/)
+  }
+})
+
