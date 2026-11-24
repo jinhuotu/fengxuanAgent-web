@@ -1,4 +1,53 @@
-/* 全局样式：只放真正全局的东西，组件样式一律写在各自 .vue 的 <style scoped> 里 */
+/*
+ * 全局样式：只放真正全局的东西，组件样式一律写在各自 .vue 的 <style scoped> 里。
+ *
+ * 第一段是"设计变量"：颜色、圆角、阴影只在这里定义一次，
+ * 各页面用 var(--xxx) 取值，不在页面里再手写十六进制颜色。
+ * 为什么要这样：以后换主题色、调圆角，只改这一个文件，所有页面一起变。
+ */
+
+/* 新手注意：CSS 变量像调色盘，页面只喊名字（--color-primary），不自己调色。 */
+:root {
+  /* ---- 品牌色：按钮、激活菜单、用户气泡、聚焦态都用它 ---- */
+  --color-primary: #2457cb;
+  --color-primary-hover: #1d4bb5;
+  --color-primary-soft: #e9efff;
+
+  /* ---- 中性色：页面底色、卡片、分割线、三级文字 ---- */
+  --color-canvas: #f6f7fb;
+  --color-sidebar: #f7f8fb;
+  --color-surface: #ffffff;
+  --color-line: #e6e9f2;
+  --color-text: #1c2433;
+  --color-text-muted: #6b7688;
+  --color-text-faint: #98a2b3;
+
+  /* ---- 状态色：成功、失败、警告 ---- */
+  --color-success: #1f9d55;
+  --color-danger: #c0392b;
+  --color-warning: #b7791f;
+
+  /* ---- 圆角：卡片大圆角，控件中等圆角 ---- */
+  --radius-card: 18px;
+  --radius-control: 12px;
+
+  /* ---- 阴影：卡片用轻的，悬浮层（输入框、弹层）用重的 ---- */
+  --shadow-card: 0 1px 2px rgba(20, 35, 61, 0.04), 0 8px 24px rgba(20, 35, 61, 0.06);
+  --shadow-float: 0 12px 32px rgba(20, 35, 61, 0.12);
+
+  /* ---- Element Plus 主色跟随品牌色 ----
+   * 按钮、分页、开关、输入框聚焦边框都读这几个变量，一起覆盖才能整体统一。
+   * light-3 到 light-9 是主色逐级变浅的梯度，Element Plus 用它们画 hover、禁用和浅底。 */
+  --el-color-primary: #2457cb;
+  --el-color-primary-light-3: #5a80da;
+  --el-color-primary-light-5: #91ace6;
+  --el-color-primary-light-7: #c3d3f1;
+  --el-color-primary-light-8: #d9e3f7;
+  --el-color-primary-light-9: #eef2fc;
+  --el-color-primary-dark-2: #1d4bb5;
+  --el-border-radius-base: 10px;
+  --el-font-family: system-ui, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
 
 * {
   box-sizing: border-box;
@@ -8,6 +57,42 @@ body {
   margin: 0;
   font-family: system-ui, 'Segoe UI', 'Microsoft YaHei', sans-serif;
   font-size: 14px;
-  color: #303133;
-  background: #fff;
+  color: var(--color-text);
+  background: var(--color-canvas);
+  /* 抗锯齿：让小字号文字在 Windows 上边缘更柔和 */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 细滚动条：默认滚动条太粗太显眼，收成 6px 并淡化颜色 */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(20, 35, 61, 0.18);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+ * 品牌方块：侧栏 Logo、登录页、对话页头像三处共用，所以放全局。
+ * 页面想调尺寸时在自己 scoped 样式里覆盖 width / height 即可。
+ */
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4c8bff 0%, #1f4fc4 100%);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
 }

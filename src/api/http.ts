@@ -11,7 +11,7 @@ import type { ApiResponse } from '@/types/api'
 import { getToken } from '@/utils/token'
 
 const http = axios.create({
-  // /api 会被 Vite 代理转给后端 8000，见 vite.config.ts
+  // /api 会被 Vite 代理转给后端 8081，见 vite.config.ts
   baseURL: '/api',
   timeout: 10000,
 })

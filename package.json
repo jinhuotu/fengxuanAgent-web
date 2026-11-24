@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "test:chat": "node --test tests/chat-*.test.mjs",
+    "test:layout": "node --test tests/layout.test.mjs",
+    "preview:layout": "node tests/layout-preview.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

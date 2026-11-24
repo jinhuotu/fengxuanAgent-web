@@ -4,7 +4,7 @@
  * 而报错信息不会告诉你是 key 拼错了。所有地方引用同一个常量即可。
  */
 
-const TOKEN_KEY = 'fengxuan_token'
+export const TOKEN_KEY = 'fengxuan_token'
 
 // 做什么：读本地保存的 token
 // 入参：无
