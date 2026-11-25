@@ -16,3 +16,11 @@ export function buildKnowledgeOptions(bases: KnowledgeBase[], currentId: number 
 export function referenceTitle(count: number): string {
   return `参考资料（${count}）`
 }
+
+// 做什么：格式化引用的原始相关度分数
+// 入参：引用事件提供的分数
+// 返回：小于一用三位有效数字，其余保留两位小数；无效分数返回破折号
+export function referenceScoreLabel(score: number): string {
+  if (!Number.isFinite(score) || score <= 0) return '—'
+  return score < 1 ? score.toPrecision(3) : score.toFixed(2)
+}

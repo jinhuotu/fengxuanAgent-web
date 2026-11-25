@@ -8,7 +8,9 @@ import ChatKnowledgeSelect from '@/components/ChatKnowledgeSelect.vue'
 import ChatSessionList from '@/components/ChatSessionList.vue'
 import ChatEmptyState from '@/components/ChatEmptyState.vue'
 import ChatMessageItem from '@/components/ChatMessageItem.vue'
+import ChatReferenceDrawer from '@/components/ChatReferenceDrawer.vue'
 import { useChat } from '@/composables/useChat'
+import { useChatReferenceDrawer } from '@/composables/useChatReferenceDrawer'
 import { latestRetryRequestId } from '@/composables/chatRecovery'
 import { useAuthStore } from '@/stores/auth'
 import type { ApiResponse } from '@/types/api'
@@ -20,6 +22,7 @@ const authStore = useAuthStore()
 const initialSessionId = Number(route.query.session) || 0
 const chat = useChat(initialSessionId)
 const { state } = chat
+const { referencePreview, openReference } = useChatReferenceDrawer(() => state.selectedId, () => authStore.token)
 const generatingSessionIds = computed(listGeneratingSessionIds)
 const retryCandidate = computed(() => latestRetryRequestId(state.current))
 const conversationBusy = computed(() => state.current.sending || state.current.confirming || state.current.pendingRequestId !== null)
@@ -215,7 +218,6 @@ onBeforeUnmount(unmountChat)
       </div>
 
       <div ref="messageContainer" v-loading="state.current.loadingHistory" class="message-list" role="log" aria-label="消息记录">
-        <!-- 内容列居中限宽：长回答不会横跨整个屏幕，阅读距离舒服 -->
         <div class="message-column">
           <ChatEmptyState v-if="!state.selectedId || (!state.current.messages.length && !state.current.loadingHistory)"
             :has-session="state.selectedId > 0" :creating="state.creating"
@@ -228,10 +230,10 @@ onBeforeUnmount(unmountChat)
           <ChatMessageItem v-for="message in state.current.messages" :key="`${message.request_id}-${message.role}`" :message="message"
             :references="message.role === 'assistant' && message.request_id === state.current.referencesRequestId ? state.current.references : []"
             :can-retry="message.role === 'assistant' && message.request_id === retryCandidate"
-            :retry-disabled="conversationBusy || state.current.loadingHistory" @retry="chat.retryRequest" />
+            :retry-disabled="conversationBusy || state.current.loadingHistory" @retry="chat.retryRequest" @open-reference="openReference" />
         </div>
       </div>
-
+      <ChatReferenceDrawer v-bind="referencePreview" v-model:visible="referencePreview.visible" />
       <!-- 输入区：悬浮卡片，输入框和按钮在同一张卡里 -->
       <div class="composer-wrap">
         <el-form ref="form" :model="state.current" :rules="inputRules" class="composer" @submit.prevent="submitQuestion">

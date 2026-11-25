@@ -33,6 +33,18 @@ export interface KnowledgeChunk {
 
 export type KnowledgeChunkPage = KnowledgePage<KnowledgeChunk>
 
+export interface KnowledgeChunkDetail {
+  chunk_id: number
+  knowledge_base_id: number
+  document_id: number
+  document_title: string
+  chunk_index: number
+  heading_path: string
+  char_start: number
+  char_end: number
+  content: string
+}
+
 export interface KnowledgeBaseDeleteResult {
   id: number
   deleted_documents: number

@@ -3,11 +3,12 @@ import http from '@/api/http'
 import type { ApiResponse } from '@/types/api'
 import type { ChatSession } from '@/types/chat'
 import type {
-  KnowledgeBase, KnowledgeBaseCreate, KnowledgeBaseDeleteResult, KnowledgeChunkPage,
+  KnowledgeBase, KnowledgeBaseCreate, KnowledgeBaseDeleteResult, KnowledgeChunkDetail, KnowledgeChunkPage,
   KnowledgeDocument, KnowledgeDocumentCreate, KnowledgeDocumentDeleteResult, KnowledgePage,
 } from '@/types/knowledge'
 
 const KNOWLEDGE_BASES_PATH = '/knowledge-bases'
+const KNOWLEDGE_CHUNKS_PATH = '/knowledge-chunks'
 const CHAT_SESSIONS_PATH = '/chat/sessions'
 const DOCUMENTS_PATH = '/documents'
 const CHUNKS_PATH = '/chunks'
@@ -85,6 +86,16 @@ export async function listKnowledgeDocumentChunks(
   const response = await http.get<ApiResponse<KnowledgeChunkPage>>(
     `${KNOWLEDGE_BASES_PATH}/${id}${DOCUMENTS_PATH}/${documentId}${CHUNKS_PATH}`,
     { ...MANAGEMENT_REQUEST, params: { page, page_size: pageSize } },
+  )
+  return response.data.data
+}
+
+// 做什么：按全局编号读取一条对话引用的原文
+// 入参：引用的切片编号
+// 返回：切片正文、文档标题及原文偏移；失败抛给页面处理
+export async function getKnowledgeChunk(chunkId: number): Promise<KnowledgeChunkDetail> {
+  const response = await http.get<ApiResponse<KnowledgeChunkDetail>>(
+    `${KNOWLEDGE_CHUNKS_PATH}/${chunkId}`, MANAGEMENT_REQUEST,
   )
   return response.data.data
 }

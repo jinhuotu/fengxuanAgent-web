@@ -5,7 +5,8 @@ import ts from 'typescript'
 
 const source = await readFile(new URL('../src/utils/knowledgeView.ts', import.meta.url), 'utf8')
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
-const { buildKnowledgeOptions, referenceTitle } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
+const { buildKnowledgeOptions, referenceTitle, referenceScoreLabel } =
+  await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
 
 const knowledgeBases = [
   { id: 3, name: '工艺标准', description: null, document_count: 12, created_at: '2026-11-24T10:00:00' },
@@ -43,4 +44,34 @@ test('keeps an empty library list unselected', () => {
 test('formats reference titles with the citation count', () => {
   assert.equal(referenceTitle(0), '参考资料（0）')
   assert.equal(referenceTitle(3), '参考资料（3）')
+})
+
+// 做什么：验证零分显示破折号
+// 入参：零分
+// 返回：文案不符时断言失败
+test('formats a zero reference score', () => {
+  assert.equal(referenceScoreLabel(0), '—')
+})
+
+// 做什么：验证小于一的相关度使用三位有效数字
+// 入参：小于一的正分
+// 返回：显示精度不符时断言失败
+test('formats a fractional reference score', () => {
+  assert.equal(referenceScoreLabel(0.272), '0.272')
+})
+
+// 做什么：验证大于一的相关度补足两位小数
+// 入参：大于一且只有一位小数的正分
+// 返回：显示精度不符时断言失败
+test('formats a higher reference score', () => {
+  assert.equal(referenceScoreLabel(29.4), '29.40')
+})
+
+// 做什么：验证无效与非有限分数使用破折号
+// 入参：NaN、无穷大与负分
+// 返回：抛异常或文案不符时断言失败
+test('formats invalid reference scores', () => {
+  assert.equal(referenceScoreLabel(Number.NaN), '—')
+  assert.equal(referenceScoreLabel(Number.POSITIVE_INFINITY), '—')
+  assert.equal(referenceScoreLabel(-1), '—')
 })

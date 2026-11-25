@@ -21,7 +21,7 @@ withDefaults(defineProps<{
   // 返回：空数组
   references: () => [],
 })
-const emit = defineEmits<{ retry: [requestId: string] }>()
+const emit = defineEmits<{ retry: [requestId: string]; openReference: [reference: ChatReference] }>()
 const referencesExpanded = ref(false)
 
 // 做什么：展开或收起本条助手消息的参考资料
@@ -63,7 +63,10 @@ function toggleReferences(): void {
             {{ referenceTitle(references.length) }}
           </button>
           <ul v-show="referencesExpanded" class="reference-list">
-            <li v-for="reference in references" :key="reference.index">[{{ reference.index }}] {{ reference.heading_path }}</li>
+            <li v-for="reference in references" :key="reference.index">
+              <button type="button" class="reference-link" :aria-label="`查看第 ${reference.index} 条参考资料原文`"
+                @click="emit('openReference', reference)">[{{ reference.index }}] {{ reference.heading_path }}</button>
+            </li>
           </ul>
         </div>
         <el-button v-if="canRetry" text :disabled="retryDisabled" @click="emit('retry', message.request_id)">重新发送此问题</el-button>
@@ -221,6 +224,24 @@ function toggleReferences(): void {
   list-style: none;
   line-height: 1.7;
   overflow-wrap: anywhere;
+}
+
+.reference-link {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.reference-link:hover,
+.reference-link:focus-visible {
+  text-decoration: underline;
 }
 
 @keyframes blink {
