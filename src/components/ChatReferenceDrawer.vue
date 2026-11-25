@@ -22,7 +22,11 @@ const emit = defineEmits<{ 'update:visible': [visible: boolean] }>()
       <el-button @click="emit('update:visible', false)">关闭</el-button>
     </div>
     <template v-else-if="detail">
-      <p class="reference-status">片段 #{{ detail.chunk_index + 1 }}　{{ formatChunkSpan(detail) }}　相关度 {{ referenceScoreLabel(score) }}</p>
+      <div class="reference-meta">
+        <span class="meta-chip">片段 #{{ detail.chunk_index + 1 }}</span>
+        <span class="meta-chip">{{ formatChunkSpan(detail) }}</span>
+        <span class="meta-chip">相关度 {{ referenceScoreLabel(score) }}</span>
+      </div>
       <p class="reference-content">{{ detail.content }}</p>
     </template>
   </el-drawer>
@@ -35,18 +39,38 @@ const emit = defineEmits<{ 'update:visible': [visible: boolean] }>()
   font-size: 13px;
 }
 
+/* 三个小标签：片段序号、字符范围、相关度，一行能扫完 */
+.reference-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.meta-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .reference-content {
-  margin: 12px 0 0;
+  margin: 0;
   max-height: 65vh;
   overflow-y: auto;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
   color: var(--color-text);
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.75;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  tab-size: 4;
 }
 
 .reference-error {

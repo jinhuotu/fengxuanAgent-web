@@ -109,12 +109,15 @@ const emit = defineEmits<{ create: []; pick: [question: string] }>()
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--transition-base), background var(--transition-base),
+    box-shadow var(--transition-base), transform var(--transition-base);
 }
 
 .suggestion:hover {
   border-color: var(--color-primary-light-7);
-  background: var(--color-primary-soft);
+  background: var(--color-primary-light-9);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
 }
 
 .suggestion strong {

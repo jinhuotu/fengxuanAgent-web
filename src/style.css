@@ -12,6 +12,13 @@
   --color-primary: #2457cb;
   --color-primary-hover: #1d4bb5;
   --color-primary-soft: #e9efff;
+  /* 主色的三档浅色：hover 描边用 light-7，浅底用 light-9。
+   * 这三个名字必须和下面 Element Plus 的 --el-color-primary-light-* 保持同值，
+   * 组件里写 var(--color-primary-light-7) 才取得到颜色（以前漏定义，hover 边框会静默失效）。 */
+  --color-primary-light-3: #5a80da;
+  --color-primary-light-5: #91ace6;
+  --color-primary-light-7: #c3d3f1;
+  --color-primary-light-9: #eef2fc;
 
   /* ---- 中性色：页面底色、卡片、分割线、三级文字 ---- */
   --color-canvas: #f6f7fb;
@@ -27,9 +34,17 @@
   --color-danger: #c0392b;
   --color-warning: #b7791f;
 
-  /* ---- 圆角：卡片大圆角，控件中等圆角 ---- */
+  /* ---- 圆角：卡片大圆角，控件中等圆角，胶囊状（按钮/标签）用 pill ---- */
   --radius-card: 18px;
   --radius-control: 12px;
+  --radius-pill: 999px;
+
+  /* ---- 动效：统一用这一个时长，避免各处 0.1s/0.2s 混用导致快慢不一 ---- */
+  --transition-base: 0.18s ease;
+  --transition-fast: 0.12s ease;
+
+  /* ---- 中性悬停底色：白底卡片上想加一层灰时用它，替代各处手写 rgba ---- */
+  --color-hover: rgba(20, 35, 61, 0.05);
 
   /* ---- 阴影：卡片用轻的，悬浮层（输入框、弹层）用重的 ---- */
   --shadow-card: 0 1px 2px rgba(20, 35, 61, 0.04), 0 8px 24px rgba(20, 35, 61, 0.06);
@@ -95,4 +110,31 @@ body {
   line-height: 1;
   flex-shrink: 0;
   user-select: none;
+}
+
+/* 选中文字用品牌浅色，避免浏览器默认蓝色和整体配色打架 */
+::selection {
+  background: var(--color-primary-light-7);
+  color: var(--color-text);
+}
+
+/* 键盘聚焦才画描边，鼠标点击不画，避免按钮上出现一圈突兀的框 */
+:focus-visible {
+  outline: 2px solid var(--color-primary-light-3);
+  outline-offset: 2px;
+}
+
+/*
+ * 系统开启"减少动效"时关掉所有动画和过渡：
+ * 这是可访问性要求，也让老机器上流式输出更稳。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

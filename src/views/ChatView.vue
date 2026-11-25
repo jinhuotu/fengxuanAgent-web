@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { isAxiosError } from 'axios'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -14,8 +14,10 @@ import { useChatReferenceDrawer } from '@/composables/useChatReferenceDrawer'
 import { latestRetryRequestId } from '@/composables/chatRecovery'
 import { useAuthStore } from '@/stores/auth'
 import type { ApiResponse } from '@/types/api'
+import type { ChatMessage, ChatReference } from '@/types/chat'
 import type { KnowledgeBase } from '@/types/knowledge'
 import { resolveMessageReferences } from '@/utils/chatReferences'
+import { isNearBottom } from '@/utils/chatScroll'
 import { loadKnowledgeBasePages } from '@/utils/knowledgePages'
 const route = useRoute()
 const router = useRouter()
@@ -29,6 +31,12 @@ const retryCandidate = computed(() => latestRetryRequestId(state.current))
 const conversationBusy = computed(() => state.current.sending || state.current.confirming || state.current.pendingRequestId !== null)
 const form = ref<FormInstance>()
 const messageContainer = ref<HTMLElement>()
+// 是否继续跟随新内容：用户往上翻看旧消息时置 false，出现"回到最新"按钮
+const followingLatest = ref(true)
+// 下一帧滚动的句柄，0 表示当前没有排队中的滚动
+let scrollFrame = 0
+// 空引用共用同一个数组，保证没有引用的消息在流式期间不会因新数组而重复渲染
+const EMPTY_REFERENCES: ChatReference[] = []
 const knowledgeBases = ref<KnowledgeBase[]>([])
 const knowledgeLoading = ref(true)
 const knowledgeLoadFailed = ref(false)
@@ -39,6 +47,10 @@ const knowledgeTruncated = ref(false)
 const KNOWLEDGE_PAGE_SIZE = 50
 const KNOWLEDGE_MAX_PAGES = 4
 const MAX_INPUT_LENGTH = 4000
+// 引用列表只在流式内容变化时重算一次，模板按消息键取值
+const messageReferences = computed(buildReferenceMap)
+// 字数提示只在接近上限时出现，平时不占视线
+const showInputCounter = computed(() => state.current.draft.length > MAX_INPUT_LENGTH * 0.8)
 const inputRules: FormRules = {
   draft: [
     { required: true, whitespace: true, message: '请输入问题', trigger: 'blur' },
@@ -63,6 +75,59 @@ function fillDraft(question: string): void {
   state.current.draft = question
 }
 
+// 做什么：记录用户是否停在消息列表底部，用于决定要不要继续自动跟随
+// 入参：无，读取滚动容器当前位置
+// 返回：无；上翻查看旧消息时停止自动滚动，不再"抢"用户的滚动条
+function handleListScroll(): void {
+  const container = messageContainer.value
+  if (!container) return
+  followingLatest.value = isNearBottom(container)
+}
+
+// 做什么：在下一帧把列表贴到底部；同一帧内多次流式更新只执行一次
+// 入参：无，读取消息容器
+// 返回：无；用户已上翻时不打扰
+function scheduleScrollToLatest(): void {
+  if (!followingLatest.value || scrollFrame) return
+  // requestAnimationFrame：把多次 delta 触发的滚动合并到浏览器绘制的下一帧，
+  // 避免每来一个字就强制排版一次，这是流式输出卡顿的主要来源。
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0
+    const container = messageContainer.value
+    if (!container || !followingLatest.value) return
+    container.scrollTop = container.scrollHeight
+  })
+}
+
+// 做什么：点击"回到最新"后恢复跟随并平滑滚到底部
+// 入参：无
+// 返回：无
+function jumpToLatest(): void {
+  followingLatest.value = true
+  const container = messageContainer.value
+  if (!container) return
+  container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+}
+
+// 做什么：把同一条消息的引用数组缓存起来，避免流式输出时每条消息都重算
+// 入参：无，读取消息与实时引用
+// 返回：以"请求编号-角色"为键的引用列表；空引用共用同一个常量数组
+function buildReferenceMap(): Map<string, ChatReference[]> {
+  const map = new Map<string, ChatReference[]>()
+  for (const message of state.current.messages) {
+    const resolved = resolveMessageReferences(message, state.current.references, state.current.referencesRequestId)
+    map.set(messageKey(message), resolved.length ? resolved : EMPTY_REFERENCES)
+  }
+  return map
+}
+
+// 做什么：生成消息在列表中的稳定键
+// 入参：一条消息
+// 返回：同一轮同一角色固定不变
+function messageKey(message: ChatMessage): string {
+  return `${message.request_id}-${message.role}`
+}
+
 // 做什么：通过 Element Plus 表单校验后发送问题
 // 入参：无，读取页面表单
 // 返回：无；校验失败留在输入框，发送错误由页面状态展示
@@ -71,17 +136,6 @@ async function submitQuestion(): Promise<void> {
   const sessionId = state.selectedId
   const valid = await form.value.validate().catch(() => false)
   if (valid && sessionId === state.selectedId) await chat.sendMessage()
-}
-
-// 做什么：新消息到达后滚到末尾，用户正在查看较早内容时不强制拉回
-// 入参：无，读取消息容器
-// 返回：无
-async function scrollToLatest(): Promise<void> {
-  const container = messageContainer.value
-  if (!container) return
-  const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 160
-  await nextTick()
-  if (nearBottom) container.scrollTop = container.scrollHeight
 }
 
 // 做什么：把选中会话写入地址栏，使刷新可以恢复
@@ -181,11 +235,25 @@ function mountChat(): void {
 // 返回：无；销毁操作可以重复执行
 function unmountChat(): void {
   window.removeEventListener('pagehide', chat.stopAllGenerations)
+  // 取消排队中的滚动帧，避免页面卸载后回调仍去碰已销毁的容器
+  if (scrollFrame) {
+    cancelAnimationFrame(scrollFrame)
+    scrollFrame = 0
+  }
   chat.dispose()
 }
 
-watch(() => state.selectedId, rememberSession)
-watch(() => state.current.messages.at(-1)?.content, scrollToLatest)
+watch(() => state.selectedId, (sessionId) => {
+  // 换会话时回到跟随状态：新会话打开就该看到最新消息
+  followingLatest.value = true
+  rememberSession(sessionId)
+})
+watch(() => state.current.messages.at(-1)?.content, scheduleScrollToLatest)
+watch(() => state.current.messages.length, () => {
+  // 自己刚发出问题时强制恢复跟随，否则上一次"上翻"会让新提问滚出视野
+  if (state.current.messages.at(-1)?.role === 'user') followingLatest.value = true
+  scheduleScrollToLatest()
+})
 watch(() => state.unauthorized, handleUnauthorized)
 watch(() => state.accountChanged, handleAccountChanged)
 watch(() => authStore.currentUser?.id, startTabIdentity, { immediate: true })
@@ -223,22 +291,35 @@ onBeforeUnmount(unmountChat)
         <el-button text :loading="state.current.confirming" @click="chat.checkResult">再次查询结果</el-button>
       </div>
 
-      <div ref="messageContainer" v-loading="state.current.loadingHistory" class="message-list" role="log" aria-label="消息记录">
+      <div ref="messageContainer" v-loading="state.current.loadingHistory && !state.current.messages.length"
+        class="message-list" role="log" aria-label="消息记录" @scroll.passive="handleListScroll">
         <div class="message-column">
           <ChatEmptyState v-if="!state.selectedId || (!state.current.messages.length && !state.current.loadingHistory)"
             :has-session="state.selectedId > 0" :creating="state.creating"
             @create="chat.newSession" @pick="fillDraft" />
 
+          <div v-if="state.current.loadingHistory && state.current.messages.length" class="load-older" aria-hidden="true">
+            <span class="history-dots"><i></i><i></i><i></i></span>
+          </div>
+
           <div v-if="state.current.messages.length < state.current.historyTotal" class="load-older">
             <el-button text :disabled="state.current.sending" @click="chat.loadHistory(true)">加载更早消息</el-button>
           </div>
 
-          <ChatMessageItem v-for="message in state.current.messages" :key="`${message.request_id}-${message.role}`" :message="message"
-            :references="resolveMessageReferences(message, state.current.references, state.current.referencesRequestId)"
+          <ChatMessageItem v-for="message in state.current.messages" :key="messageKey(message)" :message="message"
+            :references="messageReferences.get(messageKey(message)) ?? EMPTY_REFERENCES"
             :can-retry="message.role === 'assistant' && message.request_id === retryCandidate"
             :retry-disabled="conversationBusy || state.current.loadingHistory" @retry="chat.retryRequest" @open-reference="openReference" />
         </div>
       </div>
+      <!-- 上翻查看旧内容时停止自动滚动，这里给一个回到最新位置的入口 -->
+      <transition name="fade-up">
+        <button v-if="!followingLatest && state.current.messages.length" type="button" class="jump-latest"
+          aria-label="回到最新消息" @click="jumpToLatest">
+          回到最新
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
+        </button>
+      </transition>
       <ChatReferenceDrawer v-bind="referencePreview" v-model:visible="referencePreview.visible" />
       <!-- 输入区：悬浮卡片，输入框和按钮在同一张卡里 -->
       <div class="composer-wrap">
@@ -251,7 +332,10 @@ onBeforeUnmount(unmountChat)
               @keydown.ctrl.enter.prevent="submitQuestion" />
           </el-form-item>
           <div class="composer-toolbar">
-            <span class="composer-hint">Ctrl + Enter 发送 · {{ state.current.draft.length }} / {{ MAX_INPUT_LENGTH }}</span>
+            <span class="composer-hint">
+              Ctrl + Enter 发送
+              <span v-if="showInputCounter" class="composer-count">{{ state.current.draft.length }} / {{ MAX_INPUT_LENGTH }}</span>
+            </span>
             <el-button v-if="state.current.sending" round :disabled="state.current.confirming" @click="chat.stopGeneration">停止生成</el-button>
             <el-button v-else type="primary" round native-type="submit" class="send-button"
               :disabled="!state.selectedId || conversationBusy || state.current.loadingHistory || !state.current.draft.trim()">发送</el-button>
@@ -275,6 +359,7 @@ onBeforeUnmount(unmountChat)
 
 /* ---------- 右侧对话面板 ---------- */
 .conversation-panel {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -304,24 +389,108 @@ onBeforeUnmount(unmountChat)
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 28px 0 12px;
+  /* 滚到边界时不让整页跟着弹动，对话区自己收住滚动 */
+  overscroll-behavior: contain;
+  padding: 28px 0 20px;
 }
 
 /*
  * 内容列：不再写死窄宽度，而是占满面板、只在两侧留内边距。
  * clamp(最小值, 随面板宽度变化的值, 最大值)：面板越宽留白越多，但最多 72px，避免大屏两侧大片空白。
- * max-width 1200px 是上限：再宽一行字就太长，读长回答会串行。
+ * max-width 1040px 是上限：一行约 60 个汉字，再宽读长回答会串行。
  */
 .message-column {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 0 clamp(24px, 5%, 72px);
 }
 
 .load-older {
+  display: flex;
+  justify-content: center;
   margin-bottom: 20px;
   text-align: center;
+}
+
+/* 历史加载中的三点提示：比整块 v-loading 遮罩轻，不会把已读内容盖住 */
+.history-dots {
+  display: inline-flex;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+}
+
+.history-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+  animation: dot-pulse 1.2s infinite;
+}
+
+.history-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.history-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---------- 回到最新：浮在输入区上方，不遮挡消息 ---------- */
+.jump-latest {
+  position: absolute;
+  bottom: 148px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.jump-latest:hover {
+  color: var(--color-primary);
+}
+
+.jump-latest svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.fade-up-enter-active,
+.fade-up-leave-active {
+  transition: opacity var(--transition-base), transform var(--transition-base);
+}
+
+.fade-up-enter-from,
+.fade-up-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 6px);
 }
 
 /* ---------- 输入区：悬浮卡片，聚焦时描边发光 ---------- */
@@ -334,7 +503,7 @@ onBeforeUnmount(unmountChat)
 /* 输入卡片与消息列同宽，这样输入框的左右边缘和回答文字对齐 */
 .composer {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 6px 10px 8px 16px;
   border: 1px solid var(--color-line);
@@ -376,12 +545,19 @@ onBeforeUnmount(unmountChat)
   color: var(--color-text-faint);
 }
 
+/* 接近上限才显示字数，颜色提醒"快到头了" */
+.composer-count {
+  margin-left: 6px;
+  color: var(--color-warning);
+  font-variant-numeric: tabular-nums;
+}
+
 .send-button {
   min-width: 84px;
 }
 
 .composer-note {
-  max-width: 1200px;
+  max-width: 1040px;
   margin: 8px auto 0;
   font-size: 11px;
   color: var(--color-text-faint);

@@ -61,6 +61,9 @@ function toggleReferences(): void {
         <div v-if="references.length" class="message-references">
           <button type="button" class="reference-toggle" :aria-expanded="referencesExpanded" @click="toggleReferences">
             {{ referenceTitle(references.length) }}
+            <svg class="reference-chevron" :class="{ rotated: referencesExpanded }" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
           </button>
           <ul v-show="referencesExpanded" class="reference-list">
             <li v-for="reference in references" :key="reference.index">
@@ -88,10 +91,11 @@ function toggleReferences(): void {
 /* 用户气泡：最多占列宽 78%，右下角收小表示"是我说的" */
 .user-bubble {
   max-width: 78%;
-  padding: 12px 16px;
+  padding: 11px 16px;
   border-radius: 16px 16px 4px 16px;
   background: var(--color-primary-soft);
   color: #1b3d8f;
+  font-size: 15px;
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -188,60 +192,93 @@ function toggleReferences(): void {
 }
 
 .message-state {
+  display: block;
+  width: fit-content;
   margin: 10px 0 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
   font-size: 12px;
   color: var(--color-text-muted);
 }
 
 .message-state.failed {
+  background: #fdecea;
   color: var(--color-danger);
 }
 
 .message-references {
-  margin-top: 10px;
+  margin-top: 12px;
   color: var(--color-text-muted);
   font-size: 13px;
 }
 
+/* 引用入口做成一颗小胶囊：有底色、有箭头，比纯文字更像"可点开的东西" */
 .reference-toggle {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
   font: inherit;
+  font-size: 12px;
   cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
 .reference-toggle:hover {
-  text-decoration: underline;
+  border-color: var(--color-primary-light-7);
+  background: var(--color-primary-light-9);
+  color: var(--color-primary);
+}
+
+.reference-chevron {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: transform var(--transition-fast);
+}
+
+.reference-chevron.rotated {
+  transform: rotate(180deg);
 }
 
 .reference-list {
-  margin: 6px 0 0;
-  padding: 8px 12px;
+  margin: 8px 0 0;
+  padding: 4px;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
   list-style: none;
-  line-height: 1.7;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
 .reference-link {
   display: block;
   width: 100%;
-  padding: 2px 0;
+  padding: 6px 10px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-text);
   font: inherit;
   text-align: left;
   overflow-wrap: anywhere;
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .reference-link:hover,
 .reference-link:focus-visible {
-  text-decoration: underline;
+  background: var(--color-surface);
+  color: var(--color-primary);
 }
 
 @keyframes blink {
