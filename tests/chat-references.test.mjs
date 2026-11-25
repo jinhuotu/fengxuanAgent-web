@@ -7,9 +7,10 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { ElButton } from 'element-plus'
 import ts from 'typescript'
 
-const [source, knowledgeSource] = await Promise.all([
+const [source, knowledgeSource, referenceResolverSource] = await Promise.all([
   readFile(new URL('../src/components/ChatMessageItem.vue', import.meta.url), 'utf8'),
   readFile(new URL('../src/utils/knowledgeView.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../src/utils/chatReferences.ts', import.meta.url), 'utf8'),
 ])
 const compiled = compileScript(parse(source).descriptor, {
   id: 'chat-references-test', inlineTemplate: true, templateOptions: { ssr: true },
@@ -17,6 +18,9 @@ const compiled = compileScript(parse(source).descriptor, {
 const compilerOptions = { module: ts.ModuleKind.CommonJS }
 const knowledgeModule = {}
 new Function('exports', ts.transpileModule(knowledgeSource, { compilerOptions }).outputText)(knowledgeModule)
+const referenceResolverModule = {}
+new Function('exports', ts.transpileModule(referenceResolverSource, { compilerOptions }).outputText)(referenceResolverModule)
+const { resolveMessageReferences } = referenceResolverModule
 const componentModule = {}
 const modules = { vue, 'vue/server-renderer': serverRenderer, '@/utils/knowledgeView': knowledgeModule }
 new Function('require', 'exports', ts.transpileModule(compiled.content, { compilerOptions }).outputText)(
@@ -67,4 +71,23 @@ test('omits the citation area when references are not provided', async () => {
 // 返回：错误展示引用时断言失败
 test('omits references from user messages even if provided', async () => {
   assert.doesNotMatch(await renderMessage('user', references), /参考资料|工艺手册|操作规范/)
+})
+
+// 做什么：验证有历史快照时直接回读助手消息自己的引用
+// 入参：自带两条快照的助手消息和空的实时引用
+// 返回：快照没有优先展示或用户消息返回引用时断言失败
+test('prefers an assistant message reference snapshot', () => {
+  const message = { role: 'assistant', request_id: 'saved-turn', references }
+  assert.deepEqual(resolveMessageReferences(message, [], ''), references)
+  assert.deepEqual(resolveMessageReferences(message, [references[0]], 'saved-turn'), references)
+  assert.deepEqual(resolveMessageReferences({ ...message, role: 'user' }, references, 'saved-turn'), [])
+})
+
+// 做什么：验证旧结构与流式占位消息只读取与自己同轮的实时引用
+// 入参：没有快照字段的助手消息和实时请求编号
+// 返回：同轮引用丢失或引用串到另一轮时断言失败
+test('uses live references only for the matching request', () => {
+  const message = { role: 'assistant', request_id: 'live-turn' }
+  assert.deepEqual(resolveMessageReferences(message, references, 'live-turn'), references)
+  assert.deepEqual(resolveMessageReferences(message, references, 'another-turn'), [])
 })

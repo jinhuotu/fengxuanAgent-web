@@ -34,6 +34,7 @@ export interface ChatMessage {
   finish_reason: string | null
   error_code: string | null
   created_at: string
+  references?: ChatReference[]
 }
 
 export interface ChatPage<T> {

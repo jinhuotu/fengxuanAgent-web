@@ -15,7 +15,7 @@ import { latestRetryRequestId } from '@/composables/chatRecovery'
 import { useAuthStore } from '@/stores/auth'
 import type { ApiResponse } from '@/types/api'
 import type { KnowledgeBase } from '@/types/knowledge'
-
+import { resolveMessageReferences } from '@/utils/chatReferences'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -228,7 +228,7 @@ onBeforeUnmount(unmountChat)
           </div>
 
           <ChatMessageItem v-for="message in state.current.messages" :key="`${message.request_id}-${message.role}`" :message="message"
-            :references="message.role === 'assistant' && message.request_id === state.current.referencesRequestId ? state.current.references : []"
+            :references="resolveMessageReferences(message, state.current.references, state.current.referencesRequestId)"
             :can-retry="message.role === 'assistant' && message.request_id === retryCandidate"
             :retry-disabled="conversationBusy || state.current.loadingHistory" @retry="chat.retryRequest" @open-reference="openReference" />
         </div>
