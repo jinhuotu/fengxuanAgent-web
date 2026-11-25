@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { isAxiosError } from 'axios'
 import type { FormInstance, FormRules } from 'element-plus'
+import { listKnowledgeBases } from '@/api/knowledge'
+import ChatKnowledgeSelect from '@/components/ChatKnowledgeSelect.vue'
 import ChatSessionList from '@/components/ChatSessionList.vue'
 import ChatEmptyState from '@/components/ChatEmptyState.vue'
 import ChatMessageItem from '@/components/ChatMessageItem.vue'
 import { useChat } from '@/composables/useChat'
 import { latestRetryRequestId } from '@/composables/chatRecovery'
 import { useAuthStore } from '@/stores/auth'
+import type { ApiResponse } from '@/types/api'
+import type { KnowledgeBase } from '@/types/knowledge'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +25,14 @@ const retryCandidate = computed(() => latestRetryRequestId(state.current))
 const conversationBusy = computed(() => state.current.sending || state.current.confirming || state.current.pendingRequestId !== null)
 const form = ref<FormInstance>()
 const messageContainer = ref<HTMLElement>()
+const knowledgeBases = ref<KnowledgeBase[]>([])
+const knowledgeLoading = ref(true)
+const knowledgeLoadFailed = ref(false)
+const knowledgeChanges = reactive(new Set<number>())
+const knowledgeErrors = reactive<Record<number, string>>({})
+const selectedKnowledgeBaseId = computed(currentKnowledgeBaseId)
+const KNOWLEDGE_FIRST_PAGE = 1
+const KNOWLEDGE_PAGE_SIZE = 50
 const MAX_INPUT_LENGTH = 4000
 const inputRules: FormRules = {
   draft: [
@@ -101,6 +114,44 @@ function startTabIdentity(userId: number | undefined): void {
   chat.startTabSync(userId ?? null)
 }
 
+// 做什么：按后端会话列表取得当前所选知识库
+// 入参：无，使用当前会话编号
+// 返回：已保存的库编号；未选库时返回 null
+function currentKnowledgeBaseId(): number | null {
+  return state.sessions.find((session) => session.id === state.selectedId)?.knowledge_base_id ?? null
+}
+
+// 做什么：挂载后加载第一页知识库
+// 入参：无，使用固定页码与每页条数
+// 返回：无；失败只在下拉显示提示
+async function loadKnowledgeBases(): Promise<void> {
+  try {
+    knowledgeBases.value = (await listKnowledgeBases(KNOWLEDGE_FIRST_PAGE, KNOWLEDGE_PAGE_SIZE)).items
+  } catch {
+    knowledgeLoadFailed.value = true
+  } finally {
+    knowledgeLoading.value = false
+  }
+}
+
+// 做什么：保存下拉选择，并把失败提示留在发起请求的会话
+// 入参：知识库编号或表示清除选择的 null
+// 返回：无；失败时保留后端已有的选择
+async function changeKnowledgeBase(knowledgeBaseId: number | null): Promise<void> {
+  const sessionId = state.selectedId
+  if (!sessionId || knowledgeChanges.has(sessionId)) return
+  knowledgeChanges.add(sessionId)
+  delete knowledgeErrors[sessionId]
+  try {
+    await chat.updateKnowledgeBase(knowledgeBaseId)
+  } catch (error) {
+    const message = isAxiosError<ApiResponse<unknown>>(error) ? error.response?.data?.message : undefined
+    knowledgeErrors[sessionId] = message || '知识库选择保存失败，请稍后重试'
+  } finally {
+    knowledgeChanges.delete(sessionId)
+  }
+}
+
 // 做什么：页面首次加载时恢复会话，并监听浏览器离开通知
 // 入参：无
 // 返回：无
@@ -113,6 +164,7 @@ function mountChat(): void {
   startTabIdentity(authStore.currentUser?.id)
   window.addEventListener('pagehide', chat.stopAllGenerations)
   void chat.initialize()
+  void loadKnowledgeBases()
 }
 
 // 做什么：卸载时移除事件并中断仍在进行的请求
@@ -142,6 +194,10 @@ onBeforeUnmount(unmountChat)
 
     <!-- 右：白色对话面板 -->
     <section class="conversation-panel" aria-label="对话内容">
+      <ChatKnowledgeSelect :bases="knowledgeBases" :selected-id="selectedKnowledgeBaseId"
+        :loading="knowledgeLoading" :failed="knowledgeLoadFailed" :error="knowledgeErrors[state.selectedId] ?? ''"
+        :disabled="!state.selectedId || conversationBusy || generatingSessionIds.includes(state.selectedId) || knowledgeChanges.has(state.selectedId)"
+        @change="changeKnowledgeBase" />
       <el-alert v-if="state.current.error" class="chat-alert" :title="state.current.error" type="error" :closable="false" show-icon />
       <el-alert v-if="state.current.contextNotice" class="chat-alert" :title="state.current.contextNotice" type="info" :closable="false" show-icon />
       <div v-if="state.current.syncingHistory || state.current.historySyncError" class="result-confirmation" role="status">
@@ -170,6 +226,7 @@ onBeforeUnmount(unmountChat)
           </div>
 
           <ChatMessageItem v-for="message in state.current.messages" :key="`${message.request_id}-${message.role}`" :message="message"
+            :references="message.role === 'assistant' && message.request_id === state.current.referencesRequestId ? state.current.references : []"
             :can-retry="message.role === 'assistant' && message.request_id === retryCandidate"
             :retry-disabled="conversationBusy || state.current.loadingHistory" @retry="chat.retryRequest" />
         </div>

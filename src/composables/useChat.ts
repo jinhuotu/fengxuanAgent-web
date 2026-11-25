@@ -7,6 +7,7 @@ import { getToken } from '@/utils/token'
 import { confirmRequest, createRecoveryState, latestRetryRequestId, submissionWasRejected, validateManualRetry } from '@/composables/chatRecovery'
 import { discardRejectedTurn, invalidateHistorySync, refreshConversationHistory } from '@/composables/chatHistory'
 import { connectChatTabs } from '@/composables/chatTabSync'
+import { updateKnowledgeBase } from '@/composables/chatKnowledge'
 import type { ChatTabSync } from '@/composables/chatTabSync'
 
 const FIRST_PAGE = 1
@@ -27,7 +28,7 @@ interface ActiveRequest {
 function createConversation(sessionId: number) {
   return {
     sessionId, messages: [] as ChatMessage[], draft: '', error: '', contextNotice: '',
-    references: [] as ChatReference[],
+    references: [] as ChatReference[], referencesRequestId: '',
     historyPage: FIRST_PAGE, historyTotal: 0, historyVersion: 0,
     loadingHistory: false, syncingHistory: false, historySyncError: '', sending: false, active: null as ActiveRequest | null,
     ...createRecoveryState(),
@@ -202,7 +203,10 @@ function applyEvent(state: ChatState, conversation: ConversationState, active: A
   const assistant = findAssistant(conversation, active.requestId)
   if (!assistant) return
   if (event.event === 'context') conversation.contextNotice = event.payload.message
-  if (event.event === 'references') conversation.references = event.payload.items
+  if (event.event === 'references') {
+    conversation.references = event.payload.items
+    conversation.referencesRequestId = active.requestId
+  }
   if (event.event === 'started') {
     assistant.id = event.payload.assistant_id
     state.tabSync?.notify(conversation.sessionId, active.requestId)
@@ -269,7 +273,7 @@ async function sendConversation(state: ChatState, conversation: ConversationStat
   conversation.ownsPendingRequest = true
   conversation.error = ''
   conversation.contextNotice = ''
-  conversation.references = []
+  Object.assign(conversation, { references: [], referencesRequestId: '' })
   if (!retryOfRequestId || conversation.draft === content) conversation.draft = ''
   appendPendingMessages(conversation, active.requestId, content)
   try {
@@ -381,6 +385,10 @@ export function useChat(initialSessionId: number) {
     sendMessage: sendMessage.bind(null, state), stopGeneration: stopCurrentGeneration.bind(null, state),
     checkResult: checkResult.bind(null, state), retryRequest: retryRequest.bind(null, state),
     syncHistory: syncHistory.bind(null, state),
+    // 做什么：将所选知识库保存到当前会话
+    // 入参：知识库编号；null 表示清除
+    // 返回：保存完成；失败交给页面
+    updateKnowledgeBase: (knowledgeBaseId: number | null) => updateKnowledgeBase(state, knowledgeBaseId, pageIsCurrent.bind(null, state)),
     startTabSync: connectChatTabs.bind(null, state, loadSessions.bind(null, state)),
     // 做什么：主动请求当前页面状态校准
     // 入参：无

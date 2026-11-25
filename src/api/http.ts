@@ -4,17 +4,37 @@
  * 业务代码里就不用每个请求都重复设置，也不会漏带 token。
  */
 
-import axios from 'axios'
+import axios, { type AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 
 import type { ApiResponse } from '@/types/api'
-import { getToken } from '@/utils/token'
+import { clearToken, getToken } from '@/utils/token'
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    suppressErrorMessage?: boolean
+    redirectOnUnauthorized?: boolean
+  }
+}
 
 const http = axios.create({
   // /api 会被 Vite 代理转给后端 8081，见 vite.config.ts
   baseURL: '/api',
   timeout: 10000,
 })
+
+const LOGIN_PATH = '/login'
+
+// 做什么：让选择了统一跳转的请求在凭证失效时回登录页
+// 入参：失败的 Axios 响应和原请求配置
+// 返回：无；旧请求的 401 不清除后续登录换来的凭证
+function redirectExpiredSession(error: AxiosError): void {
+  if (error.response?.status !== 401 || !error.config?.redirectOnUnauthorized) return
+  const token = getToken()
+  if (!token || error.config.headers.get('Authorization') !== `Bearer ${token}`) return
+  clearToken()
+  window.location.replace(LOGIN_PATH)
+}
 
 // 请求拦截：有 token 就自动带上，业务代码不用每次手动加请求头
 http.interceptors.request.use((config) => {
@@ -31,15 +51,16 @@ http.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResponse<unknown>
     if (body.code !== 0) {
-      ElMessage.error(body.message || '请求失败')
+      if (!response.config.suppressErrorMessage) ElMessage.error(body.message || '请求失败')
       return Promise.reject(new Error(body.message || '请求失败'))
     }
     return response
   },
   (error) => {
     // 后端没启动、404、超时都会走到这里
+    redirectExpiredSession(error)
     const message: string = error.response?.data?.message ?? '网络异常，请确认后端已启动'
-    ElMessage.error(message)
+    if (!error.config?.suppressErrorMessage) ElMessage.error(message)
     return Promise.reject(error)
   },
 )

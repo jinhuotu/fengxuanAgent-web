@@ -2,14 +2,34 @@
 /**
  * 单条消息的展示组件。
  * 只负责"长什么样"：用户消息画成右侧气泡，助手消息平铺并带头像和模型标签。
- * 不发请求、不改状态；状态文字（中断、失败、长度上限）由传入的 message.status 决定。
+ * 引用展开只改变组件的本地显示；状态文字由传入的 message.status 决定。
  */
 
-import type { ChatMessage } from '@/types/chat'
+import { ref } from 'vue'
+import type { ChatMessage, ChatReference } from '@/types/chat'
+import { referenceTitle } from '@/utils/knowledgeView'
 
 // 入参：message 一条消息，来自页面状态；role 决定左右布局，status 决定尾部提示
-defineProps<{ message: ChatMessage; canRetry?: boolean; retryDisabled?: boolean }>()
+withDefaults(defineProps<{
+  message: ChatMessage
+  canRetry?: boolean
+  retryDisabled?: boolean
+  references?: ChatReference[]
+}>(), {
+  // 做什么：给未传入引用的消息单独准备空列表
+  // 入参：无
+  // 返回：空数组
+  references: () => [],
+})
 const emit = defineEmits<{ retry: [requestId: string] }>()
+const referencesExpanded = ref(false)
+
+// 做什么：展开或收起本条助手消息的参考资料
+// 入参：无，读取当前展开状态
+// 返回：无，只更新本组件的展开状态
+function toggleReferences(): void {
+  referencesExpanded.value = !referencesExpanded.value
+}
 </script>
 
 <template>
@@ -38,6 +58,14 @@ const emit = defineEmits<{ retry: [requestId: string] }>()
         <p v-if="message.status === 'interrupted'" class="message-state">已中断，以上可能是部分回答</p>
         <p v-if="message.status === 'failed'" class="message-state failed">生成失败，可重新发送问题</p>
         <p v-if="message.finish_reason === 'length'" class="message-state">已达到本次回答长度上限</p>
+        <div v-if="references.length" class="message-references">
+          <button type="button" class="reference-toggle" :aria-expanded="referencesExpanded" @click="toggleReferences">
+            {{ referenceTitle(references.length) }}
+          </button>
+          <ul v-show="referencesExpanded" class="reference-list">
+            <li v-for="reference in references" :key="reference.index">[{{ reference.index }}] {{ reference.heading_path }}</li>
+          </ul>
+        </div>
         <el-button v-if="canRetry" text :disabled="retryDisabled" @click="emit('retry', message.request_id)">重新发送此问题</el-button>
       </div>
     </template>
@@ -164,6 +192,35 @@ const emit = defineEmits<{ retry: [requestId: string] }>()
 
 .message-state.failed {
   color: var(--color-danger);
+}
+
+.message-references {
+  margin-top: 10px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.reference-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.reference-toggle:hover {
+  text-decoration: underline;
+}
+
+.reference-list {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  list-style: none;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 @keyframes blink {
