@@ -1,7 +1,7 @@
 /** 每个会话独立保存消息和生成任务，切换会话不取消后台流。 */
 import type { AxiosError } from 'axios'
 import { reactive } from 'vue'
-import { ChatRequestError, createChatSession, getChatSessions, interruptChat, streamChat } from '@/api/chat'
+import { ChatRequestError, clearChatSessions, createChatSession, deleteChatSession, getChatSessions, interruptChat, streamChat } from '@/api/chat'
 import type { ChatEvent, ChatMessage, ChatReference, ChatSession } from '@/types/chat'
 import { getToken } from '@/utils/token'
 import { confirmRequest, createRecoveryState, latestRetryRequestId, submissionWasRejected, validateManualRetry } from '@/composables/chatRecovery'
@@ -182,6 +182,72 @@ async function newSession(state: ChatState): Promise<void> {
   } finally {
     state.creating = false
   }
+}
+
+// 做什么：把展示位退回空态，不新建服务端会话
+// 入参：页面状态
+// 返回：无；已选会话编号归零
+function resetWorkspace(state: ChatState): void {
+  state.selectedId = 0
+  state.current = createConversation(0)
+}
+
+// 做什么：判断一条会话是否正在生成，本页任务先判，服务端占用兜底
+// 入参：页面状态和会话编号
+// 返回：发送中或仍持有活动请求时返回 true
+function sessionIsBusy(state: ChatState, sessionId: number): boolean {
+  const conversation = state.conversations[sessionId]
+  const listed = state.sessions.find((session) => session.id === sessionId)
+  return Boolean(conversation?.sending || conversation?.active || listed?.active_request_id)
+}
+
+// 做什么：永久删除一条会话，生成中拒绝；删除当前会话后自动切到相邻一条
+// 入参：页面状态和会话编号
+// 返回：删除成功返回 true；生成中或接口失败返回 false
+async function deleteSession(state: ChatState, sessionId: number): Promise<boolean> {
+  if (!pageIsCurrent(state) || sessionId <= 0 || sessionIsBusy(state, sessionId)) return false
+  try {
+    await deleteChatSession(sessionId)
+  } catch (error) {
+    recordError(state, error)
+    return false
+  }
+  if (!pageIsCurrent(state)) return true
+  delete state.conversations[sessionId]
+  const index = state.sessions.findIndex((session) => session.id === sessionId)
+  state.sessions = state.sessions.filter((session) => session.id !== sessionId)
+  state.sessionTotal = Math.max(0, state.sessionTotal - 1)
+  if (state.selectedId === sessionId) {
+    // 新手注意：优先落到原来的下一条，没有就取新的最后一条，避免删完停在空白但地址栏还挂着旧编号
+    const next = state.sessions[Math.min(index, state.sessions.length - 1)]
+    if (next) await selectSession(state, next.id)
+    else resetWorkspace(state)
+  }
+  void loadSessions(state)
+  return true
+}
+
+// 做什么：一次性清空全部会话，任一条在生成时整批拒绝
+// 入参：页面状态
+// 返回：清空成功返回 true；有生成任务或接口失败返回 false
+async function clearSessions(state: ChatState): Promise<boolean> {
+  if (!pageIsCurrent(state)) return false
+  const busy = state.sessions.some((session) => session.active_request_id)
+    || Object.values(state.conversations).some((conversation) => conversation.sending || conversation.active)
+  if (busy) return false
+  try {
+    await clearChatSessions()
+  } catch (error) {
+    recordError(state, error)
+    return false
+  }
+  if (!pageIsCurrent(state)) return true
+  state.conversations = {}
+  state.sessions = []
+  state.sessionTotal = 0
+  state.sessionPage = FIRST_PAGE
+  resetWorkspace(state)
+  return true
 }
 
 // 做什么：立即展示本轮问题和助手占位
@@ -381,6 +447,7 @@ export function useChat(initialSessionId: number) {
   return {
     state, initialize: initialize.bind(null, state, initialSessionId),
     newSession: newSession.bind(null, state), selectSession: selectSession.bind(null, state),
+    deleteSession: deleteSession.bind(null, state), clearSessions: clearSessions.bind(null, state),
     loadSessions: loadSessions.bind(null, state), loadHistory: loadHistory.bind(null, state),
     sendMessage: sendMessage.bind(null, state), stopGeneration: stopCurrentGeneration.bind(null, state),
     checkResult: checkResult.bind(null, state), retryRequest: retryRequest.bind(null, state),

@@ -58,6 +58,16 @@ export interface ChatRequestResult {
   active_request_id: string | null
 }
 
+export interface ChatDeleteResult {
+  session_id: number
+  deleted_messages: number
+}
+
+export interface ChatClearResult {
+  deleted_sessions: number
+  deleted_messages: number
+}
+
 export type ChatEvent =
   | { event: 'context'; payload: { message: string; retained_rounds: number; latest_round_omitted: boolean } }
   | { event: 'references'; payload: { items: ChatReference[] } }

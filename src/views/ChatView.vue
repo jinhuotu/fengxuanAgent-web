@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { isAxiosError } from 'axios'
-import type { FormInstance, FormRules } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { listKnowledgeBases } from '@/api/knowledge'
 import ChatKnowledgeSelect from '@/components/ChatKnowledgeSelect.vue'
 import ChatSessionList from '@/components/ChatSessionList.vue'
@@ -42,6 +42,9 @@ const knowledgeBases = ref<KnowledgeBase[]>([])
 const knowledgeLoading = ref(true)
 const knowledgeLoadFailed = ref(false)
 const knowledgeChanges = reactive(new Set<number>())
+// 正在删除的会话编号，防止连点重复提交
+const deletingIds = reactive(new Set<number>())
+const clearingSessions = ref(false)
 const knowledgeErrors = reactive<Record<number, string>>({})
 const selectedKnowledgeBaseId = computed(currentKnowledgeBaseId)
 const knowledgeTruncated = ref(false)
@@ -140,10 +143,63 @@ async function submitQuestion(): Promise<void> {
 }
 
 // 做什么：把选中会话写入地址栏，使刷新可以恢复
-// 入参：新会话编号
-// 返回：无；页面内部更新查询参数不创建新历史记录
+// 入参：新会话编号，0 表示空态
+// 返回：无；回到空态时清掉旧的 session 参数
 function rememberSession(sessionId: number): void {
   if (sessionId) void router.replace({ query: { session: String(sessionId) } })
+  else if (route.query.session) void router.replace({ query: {} })
+}
+
+// 做什么：确认后永久删除一条会话，生成中直接拒绝
+// 入参：会话编号
+// 返回：无；取消确认或接口失败时列表保持不变
+async function confirmDeleteSession(sessionId: number): Promise<void> {
+  if (deletingIds.has(sessionId)) return
+  if (generatingSessionIds.value.includes(sessionId)) {
+    ElMessage.warning('这条会话正在生成回答，结束后才能删除')
+    return
+  }
+  const title = state.sessions.find((session) => session.id === sessionId)?.title ?? '这条会话'
+  try {
+    await ElMessageBox.confirm(`“${title}”的全部消息将被永久删除，无法恢复。`, '删除会话', {
+      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
+      confirmButtonClass: 'el-button--danger',
+    })
+  } catch {
+    return
+  }
+  deletingIds.add(sessionId)
+  try {
+    // 新手注意：接口失败会把原因写进当前会话的 error，页面顶部已经有红色提示
+    if (await chat.deleteSession(sessionId)) ElMessage.success('会话已删除')
+  } finally {
+    deletingIds.delete(sessionId)
+  }
+}
+
+// 做什么：确认后清空本人全部会话，任一条在生成时整批拒绝
+// 入参：无
+// 返回：无；取消确认或接口失败时列表保持不变
+async function confirmClearSessions(): Promise<void> {
+  if (clearingSessions.value || !state.sessionTotal) return
+  if (generatingSessionIds.value.length) {
+    ElMessage.warning('有会话正在生成回答，结束后才能清空')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`全部 ${state.sessionTotal} 条对话和消息将被永久删除，无法恢复。`, '清空全部会话', {
+      type: 'warning', confirmButtonText: '清空', cancelButtonText: '取消',
+      confirmButtonClass: 'el-button--danger',
+    })
+  } catch {
+    return
+  }
+  clearingSessions.value = true
+  try {
+    if (await chat.clearSessions()) ElMessage.success('已清空全部会话')
+  } finally {
+    clearingSessions.value = false
+  }
 }
 
 // 做什么：登录失效时中断生成并清除身份
@@ -267,8 +323,10 @@ onBeforeUnmount(unmountChat)
   <div class="chat-page">
     <!-- 左：会话列表，直接放在灰色底上，不再套一层卡片 -->
     <ChatSessionList :sessions="state.sessions" :selected-id="state.selectedId" :total="state.sessionTotal"
-      :loading="state.loading" :creating="state.creating" :generating-session-ids="generatingSessionIds"
-      @create="chat.newSession" @select="chat.selectSession" @more="chat.loadSessions(true)" />
+      :loading="state.loading" :creating="state.creating" :clearing="clearingSessions"
+      :generating-session-ids="generatingSessionIds" :deleting-session-ids="[...deletingIds]"
+      @create="chat.newSession" @select="chat.selectSession" @more="chat.loadSessions(true)"
+      @delete="confirmDeleteSession" @clearing="confirmClearSessions" />
 
     <!-- 右：白色对话面板 -->
     <section class="conversation-panel" aria-label="对话内容">

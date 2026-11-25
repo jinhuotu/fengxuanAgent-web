@@ -1,7 +1,7 @@
 /** 普通接口复用 axios；流式 POST 通过 fetch 读取响应正文。 */
 import http from '@/api/http'
 import type { ApiResponse } from '@/types/api'
-import type { ChatEvent, ChatHistory, ChatPage, ChatSession, ChatRequestResult } from '@/types/chat'
+import type { ChatClearResult, ChatDeleteResult, ChatEvent, ChatHistory, ChatPage, ChatSession, ChatRequestResult } from '@/types/chat'
 import { createEventDecoder } from '@/utils/chatStream'
 import { getToken } from '@/utils/token'
 
@@ -38,6 +38,22 @@ export async function createChatSession(): Promise<ChatSession> {
 // 返回：会话分页；错误由拦截器提示并抛出
 export async function getChatSessions(page: number): Promise<ChatPage<ChatSession>> {
   const response = await http.get<ApiResponse<ChatPage<ChatSession>>>(CHAT_SESSIONS_PATH, { params: { page, page_size: PAGE_SIZE } })
+  return response.data.data
+}
+
+// 做什么：永久删除本人一条会话，生成中的会话由后端拒绝
+// 入参：会话编号
+// 返回：删除结果；409 表示正在生成，404 表示已不存在
+export async function deleteChatSession(sessionId: number): Promise<ChatDeleteResult> {
+  const response = await http.delete<ApiResponse<ChatDeleteResult>>(`${CHAT_SESSIONS_PATH}/${sessionId}`)
+  return response.data.data
+}
+
+// 做什么：一次性清空本人全部会话，任一条在生成时整批拒绝
+// 入参：无
+// 返回：删除的会话与消息条数
+export async function clearChatSessions(): Promise<ChatClearResult> {
+  const response = await http.delete<ApiResponse<ChatClearResult>>(CHAT_SESSIONS_PATH)
   return response.data.data
 }
 

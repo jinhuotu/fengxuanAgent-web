@@ -75,7 +75,7 @@ fengxuanAgent-web/                ✔ 已建 / □ 未建
 `chatTabSync.ts` 托管同源 BroadcastChannel、可见/焦点/存储事件与单飞轮询；`chatRemote.ts` 查询本人状态和快照，不接管停止权限；`utils/tabChannel.ts` 仅封装可选通道，无业务或鉴权。
 ChatView 展示远端观察及同步入口；auth.syncStoredToken 采用其他页面的存储并清空身份/权限，不写回 token。登录变化撤销旧页面并重新验证，通知只传标识，所有内容仍从本人接口读取。
 切换或新建会话不中断旧生成；消息、草稿、错误和活动请求按会话隔离，state.current 指向当前展示会话。停止按钮只停止当前会话，离开、刷新或关闭对话页取消本页面全部任务；历史由后端 MySQL 恢复。
-components/ChatSessionList.vue 纯展示列表和本页面正在生成的会话，发出选择、新建和分页事件，不发请求、不修改共享状态。
+components/ChatSessionList.vue 纯展示列表和本页面正在生成的会话，发出选择、新建、分页、删除和清空事件，不发请求、不修改共享状态。每行是 `li`，内含"选中"和"删除"两个独立按钮（button 不能嵌套 button）；删除图标平时隐藏，悬停或键盘聚焦时出现，生成中置灰。
 composables/chatRecovery.ts 管理有限结果确认和重试资格查询；未知结果期间禁止该会话重新发送，其他会话不受影响。最近失败或中断回答的按钮仅发事件，由 useChat 使用新 UUID 和 retry_of_request_id 提交。
 context SSE 事件由 utils/chatStream.ts 校验，useChat 写入所属会话的 contextNotice，视图作为普通信息提示展示；下一次发送清除旧提示，完整历史照常保留。
 composables/chatHistory.ts 区分初次加载与完成后的后台校准；后台校准不禁用输入和发送，失败显示独立同步提示。新发送或结果确认使旧历史响应失效；分页按请求/角色去重，恢复结果原位替换，不按临时负编号排序。
