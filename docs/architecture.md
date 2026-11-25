@@ -98,3 +98,11 @@ HomeView 只展示工作台；ChatView、UserManagementView、ChangePasswordView
 页面切换只替换右侧 RouterView；没有 KeepAlive，对话离开页面仍会执行原有中断逻辑。
 `tests/layout.test.mjs` 用真实 Vue SSR 和路由验证布局、菜单权限、高亮与登录守卫。
 `tests/layout-preview.mjs` 提供 5179 独立只读演示，不读取项目环境文件、不连接真实后端，写入请求会被拒绝。
+
+## 八、构建与按需引入
+
+`main.ts` 不再整体 `app.use(ElementPlus)`，而是列出项目实际用到的组件并逐个注册，样式也按组件引入（`element-plus/es/components/*/style/css`）。
+维护规则：新增 `<el-xxx>` 时要在 `main.ts` 的注册表和样式 import 各补一行；漏掉构建不会报错，只会出现组件不渲染或没样式。
+`tests/main-registration.test.mjs` 会扫描所有 `.vue` 模板里的 `el-` 标签，缺注册或缺样式直接失败，已挂在 `npm run test:layout` 里。
+`vite.config.ts` 用 `build.rolldownOptions.output.codeSplitting` 切出 `vendor-vue`（vue/vue-router/pinia）和 `vendor-element`（element-plus）两个块，业务代码更新时这两块的 hash 不变，浏览器缓存可复用。
+拆分前后（同一次 `npm run build`）：JS 1.17MB → 约 610KB（gzip 378KB → 211KB），CSS 393KB → 约 150KB（gzip 54KB → 23KB），>500KB 的整包警告消失。

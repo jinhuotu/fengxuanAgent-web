@@ -32,4 +32,21 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        /*
+         * 拆包：把"很少变的依赖"单独切块。
+         * 目的不是让总字节变小（总量由按需引入决定），而是让浏览器缓存有颗粒度：
+         * 业务代码改一版，vue 和 element-plus 这两个块的 hash 不变，用户不用重新下。
+         */
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-vue', test: /node_modules[\\/](@vue[\\/]|vue[\\/]|vue-router[\\/]|pinia[\\/])/ },
+            { name: 'vendor-element', test: /node_modules[\\/]element-plus[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
 })
