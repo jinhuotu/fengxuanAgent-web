@@ -79,13 +79,14 @@ components/ChatSessionList.vue 纯展示列表和本页面正在生成的会话�
 composables/chatRecovery.ts 管理有限结果确认和重试资格查询；未知结果期间禁止该会话重新发送，其他会话不受影响。最近失败或中断回答的按钮仅发事件，由 useChat 使用新 UUID 和 retry_of_request_id 提交。
 context SSE 事件由 utils/chatStream.ts 校验，useChat 写入所属会话的 contextNotice，视图作为普通信息提示展示；下一次发送清除旧提示，完整历史照常保留。
 composables/chatHistory.ts 区分初次加载与完成后的后台校准；后台校准不禁用输入和发送，失败显示独立同步提示。新发送或结果确认使旧历史响应失效；分页按请求/角色去重，恢复结果原位替换，不按临时负编号排序。
-使用纯文本展示回答，避免模型输出被当作 HTML 执行；首版没有新增前端依赖。
+助手回答由本地白名单渲染器 `utils/markdown.ts` 转成 HTML：先转义原文，再只输出 p、h1~h3、ul/ol/li、strong、em、code、pre、blockquote、hr、a，链接仅允许 http/https。没有引入第三方 Markdown 依赖，模型输出里的 HTML 只会显示为文字。
 
 ## 六、样式约定
 
-`src/style.css` 的 `:root` 是全项目唯一的设计变量来源：品牌色、中性色、圆角、阴影，以及 Element Plus 主色梯度。
+`src/style.css` 的 `:root` 是全项目唯一的设计变量来源：品牌色（含 light-3/5/7/9 四档浅色）、中性色、圆角、阴影、动效时长，以及 Element Plus 主色梯度。
 页面只在 `<style scoped>` 里写 `var(--color-primary)` 这类名字，不再手写十六进制颜色；换主题只改 style.css。
 `.brand-mark` 是侧栏、登录页、对话头像共用的品牌方块，所以放全局；其余样式一律 scoped。
+Markdown 正文由 v-html 生成，拿不到 scoped 属性，所以 ChatMessageItem 里凡是正文子元素都用 `:deep()` 选择器配样式。
 
 ## 七、统一登录后布局
 

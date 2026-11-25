@@ -7,10 +7,11 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { ElButton } from 'element-plus'
 import ts from 'typescript'
 
-const [source, knowledgeSource, referenceResolverSource] = await Promise.all([
+const [source, knowledgeSource, referenceResolverSource, markdownSource] = await Promise.all([
   readFile(new URL('../src/components/ChatMessageItem.vue', import.meta.url), 'utf8'),
   readFile(new URL('../src/utils/knowledgeView.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/utils/chatReferences.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../src/utils/markdown.ts', import.meta.url), 'utf8'),
 ])
 const compiled = compileScript(parse(source).descriptor, {
   id: 'chat-references-test', inlineTemplate: true, templateOptions: { ssr: true },
@@ -21,8 +22,10 @@ new Function('exports', ts.transpileModule(knowledgeSource, { compilerOptions })
 const referenceResolverModule = {}
 new Function('exports', ts.transpileModule(referenceResolverSource, { compilerOptions }).outputText)(referenceResolverModule)
 const { resolveMessageReferences } = referenceResolverModule
+const markdownModule = {}
+new Function('exports', ts.transpileModule(markdownSource, { compilerOptions }).outputText)(markdownModule)
 const componentModule = {}
-const modules = { vue, 'vue/server-renderer': serverRenderer, '@/utils/knowledgeView': knowledgeModule }
+const modules = { vue, 'vue/server-renderer': serverRenderer, '@/utils/knowledgeView': knowledgeModule, '@/utils/markdown': markdownModule }
 new Function('require', 'exports', ts.transpileModule(compiled.content, { compilerOptions }).outputText)(
   (name) => modules[name], componentModule,
 )

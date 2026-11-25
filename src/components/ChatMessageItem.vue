@@ -5,12 +5,13 @@
  * 引用展开只改变组件的本地显示；状态文字由传入的 message.status 决定。
  */
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { ChatMessage, ChatReference } from '@/types/chat'
 import { referenceTitle } from '@/utils/knowledgeView'
+import { renderMarkdown } from '@/utils/markdown'
 
 // 入参：message 一条消息，来自页面状态；role 决定左右布局，status 决定尾部提示
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   message: ChatMessage
   canRetry?: boolean
   retryDisabled?: boolean
@@ -23,6 +24,13 @@ withDefaults(defineProps<{
 })
 const emit = defineEmits<{ retry: [requestId: string]; openReference: [reference: ChatReference] }>()
 const referencesExpanded = ref(false)
+
+// 做什么：把助手正文渲染成 Markdown；生成中在末尾补一个闪烁光标
+// 入参：无，读取当前消息正文与状态
+// 返回：只含白名单标签的 HTML，用户消息不使用
+const renderedContent = computed(() => renderMarkdown(props.message.content, {
+  cursor: props.message.status === 'generating',
+}))
 
 // 做什么：展开或收起本条助手消息的参考资料
 // 入参：无，读取当前展开状态
@@ -45,15 +53,11 @@ function toggleReferences(): void {
           <span v-if="message.model" class="model-badge">{{ message.model }}</span>
         </div>
 
-        <div class="message-content">
-          <template v-if="message.content">
-            {{ message.content }}<span v-if="message.status === 'generating'" class="stream-cursor" aria-hidden="true"></span>
-          </template>
-          <span v-else-if="message.status === 'generating'" class="thinking">
-            <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>正在思考…
-          </span>
-          <span v-else class="empty-answer">未生成回答</span>
-        </div>
+        <div v-if="message.content" class="message-content markdown-body" v-html="renderedContent"></div>
+        <span v-else-if="message.status === 'generating'" class="thinking">
+          <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>正在思考…
+        </span>
+        <span v-else class="empty-answer">未生成回答</span>
 
         <p v-if="message.status === 'interrupted'" class="message-state">已中断，以上可能是部分回答</p>
         <p v-if="message.status === 'failed'" class="message-state failed">生成失败，可重新发送问题</p>
@@ -142,12 +146,103 @@ function toggleReferences(): void {
 .message-content {
   font-size: 15px;
   line-height: 1.8;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-/* 流式输出时的光标：一根闪烁的竖线，告诉用户"还在写" */
-.stream-cursor {
+/* ---------- Markdown 正文样式 ----------
+ * v-html 生成的子节点拿不到 scoped 属性，所以凡是孩子都要用 :deep() 才能选中。
+ * 只给白名单标签配样式，没匹配到的标签（例如表格）根本不会被渲染出来。 */
+.markdown-body :deep(p) {
+  margin: 0 0 10px;
+}
+
+.markdown-body :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  margin: 18px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.markdown-body :deep(h1:first-child),
+.markdown-body :deep(h2:first-child),
+.markdown-body :deep(h3:first-child) {
+  margin-top: 0;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.markdown-body :deep(li) {
+  margin: 3px 0;
+}
+
+.markdown-body :deep(strong) {
+  font-weight: 600;
+  color: #16243b;
+}
+
+.markdown-body :deep(em) {
+  font-style: italic;
+}
+
+.markdown-body :deep(code) {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.markdown-body :deep(pre) {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+
+.markdown-body :deep(pre code) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: pre;
+  font-size: 13px;
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--color-primary-light-7);
+  border-radius: 0 8px 8px 0;
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
+}
+
+.markdown-body :deep(hr) {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.markdown-body :deep(a) {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 流式光标：插在最后一个块内，随文字一起前进 */
+.markdown-body :deep(.md-cursor) {
   display: inline-block;
   width: 2px;
   height: 1em;
@@ -161,6 +256,7 @@ function toggleReferences(): void {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-size: 15px;
   color: var(--color-text-muted);
 }
 
