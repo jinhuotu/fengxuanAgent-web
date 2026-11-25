@@ -11,8 +11,10 @@ const KNOWLEDGE_BASES_PATH = '/knowledge-bases'
 const KNOWLEDGE_CHUNKS_PATH = '/knowledge-chunks'
 const CHAT_SESSIONS_PATH = '/chat/sessions'
 const DOCUMENTS_PATH = '/documents'
+const FILE_PATH = '/file'
 const CHUNKS_PATH = '/chunks'
 const MANAGEMENT_REQUEST = { suppressErrorMessage: true, redirectOnUnauthorized: true }
+const FILE_UPLOAD_TIMEOUT_MS = 60000
 
 // 做什么：分页读取本人可用的知识库
 // 入参：从一开始的页码、每页条数及是否在登录失效时统一跳转
@@ -53,6 +55,20 @@ export async function listKnowledgeDocuments(
 export async function uploadKnowledgeDocument(id: number, payload: KnowledgeDocumentCreate): Promise<KnowledgeDocument> {
   const response = await http.post<ApiResponse<KnowledgeDocument>>(
     `${KNOWLEDGE_BASES_PATH}/${id}${DOCUMENTS_PATH}`, payload, MANAGEMENT_REQUEST,
+  )
+  return response.data.data
+}
+
+// 做什么：将单个文件发给后端解析
+// 入参：知识库编号和浏览器所选文件
+// 返回：已入库的文档；请求错误交给上传入口展示
+export async function uploadKnowledgeDocumentFile(id: number, file: File): Promise<KnowledgeDocument> {
+  const body = new FormData()
+  // 新手注意：FormData 像带标签的信封，浏览器根据字段自动设置 multipart 边界。
+  body.append('file', file)
+  const response = await http.post<ApiResponse<KnowledgeDocument>>(
+    `${KNOWLEDGE_BASES_PATH}/${id}${DOCUMENTS_PATH}${FILE_PATH}`, body,
+    { ...MANAGEMENT_REQUEST, timeout: FILE_UPLOAD_TIMEOUT_MS },
   )
   return response.data.data
 }

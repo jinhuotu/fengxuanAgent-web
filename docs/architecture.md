@@ -106,3 +106,9 @@ HomeView 只展示工作台；ChatView、UserManagementView、ChangePasswordView
 `tests/main-registration.test.mjs` 会扫描所有 `.vue` 模板里的 `el-` 标签，缺注册或缺样式直接失败，已挂在 `npm run test:layout` 里。
 `vite.config.ts` 用 `build.rolldownOptions.output.codeSplitting` 切出 `vendor-vue`（vue/vue-router/pinia）和 `vendor-element`（element-plus）两个块，业务代码更新时这两块的 hash 不变，浏览器缓存可复用。
 拆分前后（同一次 `npm run build`）：JS 1.17MB → 约 610KB（gzip 378KB → 211KB），CSS 393KB → 约 150KB（gzip 54KB → 23KB），>500KB 的整包警告消失。
+
+## 九、知识库文件上传
+
+知识库文档页保留粘贴正文入口，并提供「上传文件」按钮。浏览器单次选择一个 .txt、.md、.docx 或 .pdf 文件，前端先检查扩展名和 10 MB 上限。
+`useKnowledgeFileUpload.ts` 管理上传中的提示和重复提交，`api/knowledge.ts` 通过 `FormData` 将 `file` 字段发送到 `POST /knowledge-bases/{id}/documents/file`。
+等待解析时按钮显示「正在上传并解析…」。成功后刷新第一页和库的文档数，失败直接显示后端文案。

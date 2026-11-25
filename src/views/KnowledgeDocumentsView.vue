@@ -11,6 +11,7 @@ import KnowledgeTableCard from '@/components/KnowledgeTableCard.vue'
 import {
   BASE_NOT_FOUND_CODE, DOCUMENT_NOT_FOUND_CODE, knowledgeNotFoundCode, knowledgeRequestMessage, useKnowledgeDeletion,
 } from '@/composables/knowledgeManagement'
+import { KNOWLEDGE_FILE_ACCEPT, useKnowledgeFileUpload } from '@/composables/useKnowledgeFileUpload'
 import type { ApiResponse } from '@/types/api'
 import type { KnowledgeBase, KnowledgeChunk, KnowledgeDocument } from '@/types/knowledge'
 import {
@@ -37,6 +38,10 @@ const currentPage = ref(FIRST_PAGE)
 const totalCount = ref(0)
 const loading = ref(false)
 const loadError = ref('')
+const fileInput = ref<HTMLInputElement>()
+const { fileUploading, selectKnowledgeFile } = useKnowledgeFileUpload(
+  () => knowledgeBaseId.value, () => loadDocuments(FIRST_PAGE, true),
+)
 let latestListRequest = 0
 let latestChunkRequest = 0
 const preview = reactive({
@@ -302,9 +307,16 @@ watch(knowledgeBaseId, openKnowledgeBase, { immediate: true })
       <p v-if="knowledgeBase">{{ formatDocumentCount(knowledgeBase.document_count) }}</p>
     </template>
     <template #actions>
-      <el-button type="primary" :disabled="!knowledgeBase || loading || uploading" @click="uploadVisible = true">
-        + 上传文档
-      </el-button>
+      <div>
+        <input ref="fileInput" type="file" :accept="KNOWLEDGE_FILE_ACCEPT" hidden @change="selectKnowledgeFile" />
+        <el-button :disabled="!knowledgeBase || loading || uploading || fileUploading" @click="uploadVisible = true">
+          + 上传文档
+        </el-button>
+        <el-button type="primary" :loading="fileUploading" :disabled="!knowledgeBase || loading || uploading"
+          @click="fileInput?.click()">
+          {{ fileUploading ? '正在上传并解析…' : '上传文件' }}
+        </el-button>
+      </div>
     </template>
     <el-table :data="documentRows" row-key="id" empty-text="这个知识库还没有文档，先上传一篇">
       <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
