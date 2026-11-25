@@ -5,6 +5,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { bindUserRole, changeUserStatus, createUser, getRoles, getUserList, unbindUserRole } from '@/api/users'
 import RoleManageDialog from '@/components/RoleManageDialog.vue'
+import SkeletonTable from '@/components/SkeletonTable.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { RoleSummary, UserListItem } from '@/types/api'
 import { validateNewPassword } from '@/utils/passwordPolicy'
@@ -213,7 +214,8 @@ onMounted(loadUsers)
 </script>
 
 <template>
-  <el-card v-loading="loading" class="users-card">
+  <!-- 首屏没有数据时用骨架表；已有数据的分页刷新才用轻遮罩，避免整页闪白 -->
+  <el-card v-loading="loading && !!userItems.length" class="users-card">
     <div class="users-heading">
       <div>
         <h1>用户管理</h1>
@@ -225,6 +227,7 @@ onMounted(loadUsers)
       </div>
     </div>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+    <SkeletonTable v-else-if="loading && !userItems.length" :rows="10" :columns="5" label="正在加载用户列表" />
     <el-table v-else :data="userItems" row-key="id" empty-text="暂无用户">
       <el-table-column prop="id" label="编号" width="90" />
       <el-table-column prop="username" label="用户名" min-width="150" />

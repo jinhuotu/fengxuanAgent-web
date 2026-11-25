@@ -294,7 +294,8 @@ watch(knowledgeBaseId, openKnowledgeBase, { immediate: true })
 
 <template>
   <KnowledgeTableCard :loading="loading" :error="loadError" :current-page="currentPage" :page-size="PAGE_SIZE"
-    :total="totalCount" @retry="loadDocuments(currentPage, true)" @page-change="loadDocuments">
+    :total="totalCount" :skeleton="loading && !documents.length"
+    @retry="loadDocuments(currentPage, true)" @page-change="loadDocuments">
     <template #heading>
       <RouterLink :to="{ name: BASES_ROUTE }" class="back-to-knowledge">← 知识库</RouterLink>
       <h1>{{ knowledgeBase?.name ?? '知识库文档' }}</h1>

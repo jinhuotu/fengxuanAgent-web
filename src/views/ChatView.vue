@@ -7,6 +7,7 @@ import { listKnowledgeBases } from '@/api/knowledge'
 import ChatKnowledgeSelect from '@/components/ChatKnowledgeSelect.vue'
 import ChatSessionList from '@/components/ChatSessionList.vue'
 import ChatEmptyState from '@/components/ChatEmptyState.vue'
+import ChatHistorySkeleton from '@/components/ChatHistorySkeleton.vue'
 import ChatMessageItem from '@/components/ChatMessageItem.vue'
 import ChatReferenceDrawer from '@/components/ChatReferenceDrawer.vue'
 import { useChat } from '@/composables/useChat'
@@ -291,9 +292,10 @@ onBeforeUnmount(unmountChat)
         <el-button text :loading="state.current.confirming" @click="chat.checkResult">再次查询结果</el-button>
       </div>
 
-      <div ref="messageContainer" v-loading="state.current.loadingHistory && !state.current.messages.length"
-        class="message-list" role="log" aria-label="消息记录" @scroll.passive="handleListScroll">
+      <div ref="messageContainer" class="message-list" role="log" aria-label="消息记录" @scroll.passive="handleListScroll">
         <div class="message-column">
+          <ChatHistorySkeleton v-if="state.current.loadingHistory && !state.current.messages.length" />
+
           <ChatEmptyState v-if="!state.selectedId || (!state.current.messages.length && !state.current.loadingHistory)"
             :has-session="state.selectedId > 0" :creating="state.creating"
             @create="chat.newSession" @pick="fillDraft" />

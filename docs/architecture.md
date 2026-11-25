@@ -87,6 +87,7 @@ composables/chatHistory.ts 区分初次加载与完成后的后台校准；后�
 页面只在 `<style scoped>` 里写 `var(--color-primary)` 这类名字，不再手写十六进制颜色；换主题只改 style.css。
 `.brand-mark` 是侧栏、登录页、对话头像共用的品牌方块，所以放全局；其余样式一律 scoped。
 Markdown 正文由 v-html 生成，拿不到 scoped 属性，所以 ChatMessageItem 里凡是正文子元素都用 `:deep()` 选择器配样式。
+加载态统一约定：首屏还没有任何数据时用骨架（`SkeletonTable`、`ChatHistorySkeleton`），已有数据的分页或刷新才用轻遮罩，避免整块闪白。
 
 ## 七、统一登录后布局
 

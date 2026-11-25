@@ -1,16 +1,20 @@
 <script setup lang="ts">
+import SkeletonTable from '@/components/SkeletonTable.vue'
+
 defineProps<{
   loading: boolean
   error: string
   currentPage: number
   pageSize: number
   total: number
+  // 首次加载且还没有任何数据：用骨架表占位，加载完直接换成真表格
+  skeleton?: boolean
 }>()
 const emit = defineEmits<{ retry: []; pageChange: [page: number] }>()
 </script>
 
 <template>
-  <el-card v-loading="loading" class="knowledge-card">
+  <el-card class="knowledge-card">
     <header class="knowledge-heading">
       <div><slot name="heading" /></div>
       <slot name="actions" />
@@ -20,9 +24,12 @@ const emit = defineEmits<{ retry: []; pageChange: [page: number] }>()
       <el-button @click="emit('retry')">重试</el-button>
     </div>
     <template v-else>
-      <slot />
-      <el-pagination :current-page="currentPage" :page-size="pageSize" :total="total"
-        :disabled="loading" layout="total, prev, pager, next" @update:current-page="emit('pageChange', $event)" />
+      <SkeletonTable v-if="skeleton" :rows="6" :columns="4" label="正在加载列表" />
+      <template v-else>
+        <slot />
+        <el-pagination :current-page="currentPage" :page-size="pageSize" :total="total"
+          :disabled="loading" layout="total, prev, pager, next" @update:current-page="emit('pageChange', $event)" />
+      </template>
     </template>
   </el-card>
 </template>

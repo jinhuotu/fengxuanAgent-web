@@ -122,7 +122,8 @@ onMounted(loadBases)
 
 <template>
   <KnowledgeTableCard :loading="loading" :error="loadError" :current-page="currentPage"
-    :page-size="PAGE_SIZE" :total="totalCount" @retry="loadBases()" @page-change="loadBases">
+    :page-size="PAGE_SIZE" :total="totalCount" :skeleton="loading && !knowledgeBases.length"
+    @retry="loadBases()" @page-change="loadBases">
     <template #heading><h1>知识库</h1></template>
     <template #actions>
       <el-button type="primary" :disabled="loading || creating" @click="createVisible = true">+ 新建知识库</el-button>
