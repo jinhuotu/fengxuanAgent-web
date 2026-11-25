@@ -10,6 +10,7 @@ const props = defineProps<{
   loading: boolean
   failed: boolean
   error: string
+  truncated?: boolean
 }>()
 const emit = defineEmits<{ change: [knowledgeBaseId: number | null] }>()
 const selection = computed(knowledgeOptions)
@@ -35,7 +36,7 @@ function changeSelection(value: number | null | undefined): void {
       <span>知识库</span>
       <el-select :model-value="failed ? null : selectedId"
         :placeholder="failed ? '知识库加载失败' : '不使用知识库'"
-        :disabled="disabled || loading || failed" :loading="loading" :value-on-clear="null"
+        :disabled="disabled || loading || failed" :loading="loading" :value-on-clear="null" filterable
         aria-label="知识库" class="knowledge-select" clearable @change="changeSelection">
         <el-option v-if="!loading && !failed && selection.orphan && selectedId !== null"
           :value="selectedId" label="已失效的知识库" disabled />
@@ -43,6 +44,7 @@ function changeSelection(value: number | null | undefined): void {
       </el-select>
     </div>
     <p v-if="!loading && !failed && !bases.length" class="knowledge-note"><RouterLink to="/knowledge">还没有知识库，去新建一个</RouterLink></p>
+    <p v-else-if="!loading && !failed && truncated" class="knowledge-note">知识库较多，这里只列出前几页；完整列表请到知识库页查看。</p>
     <p v-if="error" class="knowledge-error" role="alert">{{ error }}</p>
   </div>
 </template>

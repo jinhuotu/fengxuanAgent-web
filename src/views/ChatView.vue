@@ -16,6 +16,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { ApiResponse } from '@/types/api'
 import type { KnowledgeBase } from '@/types/knowledge'
 import { resolveMessageReferences } from '@/utils/chatReferences'
+import { loadKnowledgeBasePages } from '@/utils/knowledgePages'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -34,8 +35,9 @@ const knowledgeLoadFailed = ref(false)
 const knowledgeChanges = reactive(new Set<number>())
 const knowledgeErrors = reactive<Record<number, string>>({})
 const selectedKnowledgeBaseId = computed(currentKnowledgeBaseId)
-const KNOWLEDGE_FIRST_PAGE = 1
+const knowledgeTruncated = ref(false)
 const KNOWLEDGE_PAGE_SIZE = 50
+const KNOWLEDGE_MAX_PAGES = 4
 const MAX_INPUT_LENGTH = 4000
 const inputRules: FormRules = {
   draft: [
@@ -124,12 +126,16 @@ function currentKnowledgeBaseId(): number | null {
   return state.sessions.find((session) => session.id === state.selectedId)?.knowledge_base_id ?? null
 }
 
-// 做什么：挂载后加载第一页知识库
-// 入参：无，使用固定页码与每页条数
-// 返回：无；失败只在下拉显示提示
+// 做什么：挂载后按页加载知识库，最多取满上限页数
+// 入参：无，使用固定起始页码、每页条数与页数上限
+// 返回：无；失败只在下拉显示提示，超出上限时标记为未完整展示
 async function loadKnowledgeBases(): Promise<void> {
   try {
-    knowledgeBases.value = (await listKnowledgeBases(KNOWLEDGE_FIRST_PAGE, KNOWLEDGE_PAGE_SIZE)).items
+    const result = await loadKnowledgeBasePages(
+      (page, pageSize) => listKnowledgeBases(page, pageSize), KNOWLEDGE_PAGE_SIZE, KNOWLEDGE_MAX_PAGES,
+    )
+    knowledgeBases.value = result.items
+    knowledgeTruncated.value = result.truncated
   } catch {
     knowledgeLoadFailed.value = true
   } finally {
@@ -197,7 +203,7 @@ onBeforeUnmount(unmountChat)
 
     <!-- 右：白色对话面板 -->
     <section class="conversation-panel" aria-label="对话内容">
-      <ChatKnowledgeSelect :bases="knowledgeBases" :selected-id="selectedKnowledgeBaseId"
+      <ChatKnowledgeSelect :bases="knowledgeBases" :selected-id="selectedKnowledgeBaseId" :truncated="knowledgeTruncated"
         :loading="knowledgeLoading" :failed="knowledgeLoadFailed" :error="knowledgeErrors[state.selectedId] ?? ''"
         :disabled="!state.selectedId || conversationBusy || generatingSessionIds.includes(state.selectedId) || knowledgeChanges.has(state.selectedId)"
         @change="changeKnowledgeBase" />
