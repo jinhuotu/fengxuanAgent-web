@@ -82,6 +82,7 @@ test('users menu follows permission state', async () => {
   const ordinary = createWorkspace([])
   const ordinaryHtml = await renderWorkspace(ordinary.router, '/home')
   assert.doesNotMatch(ordinaryHtml, /href="\/users"/)
+  assert.match(ordinaryHtml, /href="\/knowledge"[^>]*aria-label="知识库"/)
   const manager = createWorkspace(['users:list'])
   assert.match(await renderWorkspace(manager.router, '/home'), /href="\/users"/)
 })

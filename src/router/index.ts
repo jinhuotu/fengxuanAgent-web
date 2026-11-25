@@ -11,6 +11,8 @@ import LoginView from '@/views/LoginView.vue'
 import ChangePasswordView from '@/views/ChangePasswordView.vue'
 import UserManagementView from '@/views/UserManagementView.vue'
 import ChatView from '@/views/ChatView.vue'
+import KnowledgeBasesView from '@/views/KnowledgeBasesView.vue'
+import KnowledgeDocumentsView from '@/views/KnowledgeDocumentsView.vue'
 import AppLayout from '@/layouts/AppLayout.vue'
 
 const router = createRouter({
@@ -27,6 +29,9 @@ const router = createRouter({
       children: [
         { path: 'home', name: 'home', component: HomeView, meta: { title: '工作台' } },
         { path: 'chat', name: 'chat', component: ChatView, meta: { title: 'AI 对话' } },
+        { path: 'knowledge', name: 'knowledge', component: KnowledgeBasesView, meta: { title: '知识库' } },
+        { path: 'knowledge/:knowledgeBaseId', name: 'knowledge-documents', component: KnowledgeDocumentsView,
+          meta: { title: '知识库文档' } },
         { path: 'users', name: 'users', component: UserManagementView, meta: { title: '用户管理' } },
         { path: 'change-password', name: 'change-password', component: ChangePasswordView, meta: { title: '修改密码' } },
       ],

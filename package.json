@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "test:chat": "node --test tests/chat-*.test.mjs",
+    "test:chat": "node --test tests/chat-*.test.mjs tests/knowledge-ui.test.mjs",
     "test:layout": "node --test tests/layout.test.mjs",
+    "test:knowledge": "node --test tests/knowledge-*.test.mjs",
     "preview:layout": "node tests/layout-preview.mjs",
     "preview": "vite preview"
   },
