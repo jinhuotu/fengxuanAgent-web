@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 const source = await readFile(new URL('../src/utils/knowledgeStatus.ts', import.meta.url), 'utf8')
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
-const { documentStatusLabel, formatDocumentCount, formatChunkSpan, formatChunkCount } =
+const { documentStatusLabel, formatDocumentCount, formatChunkSpan, formatChunkCount, countKnowledgeCharacters } =
   await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
 
 // 做什么：验证四个处理中状态各有文案且保持弱化样式
@@ -75,4 +75,14 @@ test('labels invalid chunk spans', () => {
 test('formats the total chunk count', () => {
   assert.equal(formatChunkCount(0), '共 0 段')
   assert.equal(formatChunkCount(12), '共 12 段')
+})
+
+// 做什么：确认字数按完整字符计数，占两个位置的字符不会被算成两个字
+// 入参：空文本、纯中文、带表情和带扩展区汉字的文本
+// 返回：计数与肉眼看到的字符数不一致时断言失败
+test('counts characters instead of UTF-16 code units', () => {
+  assert.equal(countKnowledgeCharacters(''), 0)
+  assert.equal(countKnowledgeCharacters('知识库'), 3)
+  assert.equal(countKnowledgeCharacters('简历😀'), 3)
+  assert.equal(countKnowledgeCharacters('古文𠀀'), 3)
 })

@@ -54,6 +54,16 @@ test('renders fenced code blocks with language class', () => {
   assert.match(html, /<pre><code class="language-py">print\(&quot;&lt;hi&gt;&quot;\)<\/code><\/pre>/)
 })
 
+// 做什么：确认代码块语言名只保留字母、数字和 +#-.，引号和尖括号进不了 class 属性
+// 入参：语言名里夹带引号、空格和事件属性的 fenced code，以及一个含加加号的语言名
+// 返回：语言名原样进入 class、属性被拆开或合法字符被误删时失败
+test('sanitizes the fenced code language name', () => {
+  const hostile = renderMarkdown('```py" onload="alert(1)\nprint(1)\n```')
+  assert.match(hostile, /<pre><code class="language-pyonloadalert1">print\(1\)<\/code><\/pre>/)
+  assert.doesNotMatch(hostile, /language-py"|\sonload=/)
+  assert.match(renderMarkdown('``` C++ 17\nx\n```'), /<code class="language-c\+\+17">x<\/code>/)
+})
+
 // 做什么：确认流式输出中未闭合的代码块也能先展示
 // 入参：只有开头的 fenced code
 // 返回：内容丢失或残留反引号时失败
