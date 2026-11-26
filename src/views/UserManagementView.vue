@@ -3,7 +3,7 @@ import type { AxiosError } from 'axios'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { bindUserRole, changeUserStatus, createUser, getRoles, getUserList, unbindUserRole } from '@/api/users'
+import { bindUserRole, changeUserStatus, createUser, deleteUser, getRoles, getUserList, unbindUserRole } from '@/api/users'
 import RoleManageDialog from '@/components/RoleManageDialog.vue'
 import SkeletonTable from '@/components/SkeletonTable.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -19,6 +19,7 @@ const PERMISSION_USERS_LIST = 'users:list'
 const PERMISSION_USERS_CREATE = 'users:create'
 const PERMISSION_USERS_ASSIGN_ROLE = 'users:assign_role'
 const PERMISSION_USERS_DISABLE = 'users:disable'
+const PERMISSION_USERS_DELETE = 'users:delete'
 const currentPage = ref(FIRST_PAGE)
 const userItems = ref<UserListItem[]>([])
 const totalCount = ref(0)
@@ -28,11 +29,14 @@ const ADMIN_ROLE_CODE = 'admin'
 type RoleAction = 'bind' | 'unbind'
 const canBindRoles = computed(() => authStore.hasPermission(PERMISSION_USERS_ASSIGN_ROLE))
 const canChangeStatus = computed(() => authStore.hasPermission(PERMISSION_USERS_DISABLE))
+const canDeleteUsers = computed(() => authStore.hasPermission(PERMISSION_USERS_DELETE))
+const canManageUsers = computed(() => canBindRoles.value || canChangeStatus.value || canDeleteUsers.value)
 const roleDialog = reactive({
   action: 'bind' as RoleAction, user: null as UserListItem | null, roleCode: '',
   options: [] as RoleSummary[], visible: false, loading: false, saving: false,
 })
 const statusChangeUserId = ref<number | null>(null)
+const deletingUserId = ref<number | null>(null)
 const createDialogVisible = ref(false)
 const creating = ref(false)
 const createFormRef = ref<FormInstance>()
@@ -210,12 +214,37 @@ async function submitUserStatus(user: UserListItem): Promise<void> {
     statusChangeUserId.value = null
   }
 }
+
+// 做什么：逻辑删除他人账号，删除前说明后果并二次确认
+// 入参：当前行的公开用户信息
+// 返回：成功后刷新列表；取消或失败时保留当前显示
+async function submitUserDelete(user: UserListItem): Promise<void> {
+  if (!canDeleteUsers.value || !canEditUser(user.id) || deletingUserId.value !== null) return
+  const requestToken = authStore.token
+  deletingUserId.value = user.id
+  try {
+    const confirmed = await confirmUserAction(
+      `删除后「${user.username}」会立即退出登录并从列表移除，账号无法恢复。是否继续？`, '删除账号', '确认删除',
+    )
+    if (!confirmed || requestToken !== authStore.token || !canDeleteUsers.value || !canEditUser(user.id)) return
+    await deleteUser(user.id)
+    ElMessage.success(`账号「${user.username}」已删除`)
+    // 新手注意：删掉一页里的最后一条后，这一页就像空了的抽屉，要退回上一页才看得到东西。
+    const lastPage = Math.max(FIRST_PAGE, Math.ceil((totalCount.value - 1) / PAGE_SIZE))
+    currentPage.value = Math.min(currentPage.value, lastPage)
+    await loadUsers()
+  } catch {
+    // 请求错误已由统一拦截器提示，保留已展示的列表。
+  } finally {
+    deletingUserId.value = null
+  }
+}
 onMounted(loadUsers)
 </script>
 
 <template>
   <!-- 首屏没有数据时用骨架表；已有数据的分页刷新才用轻遮罩，避免整页闪白 -->
-  <el-card v-loading="loading && !!userItems.length" class="users-card">
+  <section v-loading="loading && !!userItems.length" class="users-card">
     <div class="users-heading">
       <div>
         <h1>用户管理</h1>
@@ -223,14 +252,23 @@ onMounted(loadUsers)
       </div>
       <div class="users-toolbar">
         <el-button :loading="loading" @click="loadUsers">刷新列表</el-button>
-        <el-button v-if="!loading && !loadError && authStore.hasPermission(PERMISSION_USERS_CREATE)" type="primary" @click="createDialogVisible = true">新建用户</el-button>
+        <el-button v-if="!loading && !loadError && authStore.hasPermission(PERMISSION_USERS_CREATE)" type="primary" class="ink-button" @click="createDialogVisible = true">新建用户</el-button>
       </div>
     </div>
+    <div class="data-panel">
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
     <SkeletonTable v-else-if="loading && !userItems.length" :rows="10" :columns="5" label="正在加载用户列表" />
-    <el-table v-else :data="userItems" row-key="id" empty-text="暂无用户">
-      <el-table-column prop="id" label="编号" width="90" />
-      <el-table-column prop="username" label="用户名" min-width="150" />
+    <el-table v-else :data="userItems" row-key="id" empty-text="暂无用户" class="data-table">
+      <el-table-column prop="id" label="编号" width="90" class-name="is-faint" />
+      <el-table-column label="用户名" min-width="170">
+        <template #default="{ row }">
+          <span class="user-cell">
+            <!-- 首字母圆标：比纯文字更容易在列表里把人和人对上 -->
+            <i class="user-avatar" aria-hidden="true">{{ row.username.slice(0, 1).toUpperCase() }}</i>
+            <span class="user-name">{{ row.username }}</span>
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column prop="display_name" label="显示名" min-width="150" />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
@@ -248,7 +286,7 @@ onMounted(loadUsers)
           <span v-else>角色信息待加载</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="canBindRoles || canChangeStatus" label="操作" width="234">
+      <el-table-column v-if="canManageUsers" label="操作" :width="canDeleteUsers ? 296 : 234">
         <template #default="{ row }">
           <template v-if="canBindRoles">
             <el-button link type="primary" :disabled="!canEditUser(row.id) || roleDialog.loading || roleDialog.saving"
@@ -260,12 +298,18 @@ onMounted(loadUsers)
           <el-button v-if="canChangeStatus" link :type="row.status === USER_STATUS_ACTIVE ? 'danger' : 'success'"
             :loading="statusChangeUserId === row.id" :disabled="!canEditUser(row.id) || statusChangeUserId !== null"
             @click="submitUserStatus(row)">{{ row.status === USER_STATUS_ACTIVE ? '停用' : '启用' }}</el-button>
+          <el-button v-if="canDeleteUsers" link type="danger" class="user-delete"
+            :loading="deletingUserId === row.id" :disabled="!canEditUser(row.id) || deletingUserId !== null"
+            @click="submitUserDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
     <el-pagination v-if="!loadError" v-model:current-page="currentPage" :page-size="PAGE_SIZE"
-      :total="totalCount" :disabled="loading" layout="total, prev, pager, next" @current-change="loadUsers" />
-  </el-card>
+      :total="totalCount" :disabled="loading" layout="slot, prev, pager, next" @current-change="loadUsers">
+      <span class="data-total">共 {{ totalCount }} 条</span>
+    </el-pagination>
+    </div>
+  </section>
   <RoleManageDialog v-model="roleDialog.visible" v-model:role-code="roleDialog.roleCode"
     :action="roleDialog.action" :user="roleDialog.user" :options="roleDialog.options"
     :loading="roleDialog.loading" :saving="roleDialog.saving"
@@ -284,45 +328,41 @@ onMounted(loadUsers)
       <el-form-item label="显示名（可选）" prop="display_name">
         <el-input v-model="createForm.display_name" :maxlength="MAX_ACCOUNT_LENGTH" />
       </el-form-item>
-      <el-button native-type="submit" type="primary" :loading="creating" :disabled="!authStore.hasPermission(PERMISSION_USERS_CREATE)">确认创建</el-button>
+      <el-button native-type="submit" type="primary" class="ink-button" :loading="creating" :disabled="!authStore.hasPermission(PERMISSION_USERS_CREATE)">确认创建</el-button>
       <el-button :disabled="creating" @click="createDialogVisible = false">取消</el-button>
     </el-form>
   </el-dialog>
 </template>
 
 <style scoped>
-.role-tag {
-  margin: 3px 6px 3px 0;
-}
-
-/* 卡片与全局对话面板同一套圆角和阴影 */
+/* 与知识库列表同一套：标题行在白板上方，表格装在白色圆角板里，表格本身的样子由全局 .data-table 负责 */
 .users-card {
   width: 100%;
-  margin: 0 auto;
   max-width: 1120px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  --el-card-padding: 26px 28px;
+  margin: 0 auto;
 }
 
 /* 标题在左、操作在右；窄屏时自动换成上下两行 */
 .users-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin-bottom: 20px;
 }
 
 .users-heading h1 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 .users-heading p {
   margin: 6px 0 0;
+  font-size: 14px;
   color: var(--color-text-muted);
 }
 
@@ -331,19 +371,69 @@ onMounted(loadUsers)
   gap: 8px;
 }
 
-.users-card :deep(.el-table) {
-  margin: 20px 0 0;
-  --el-table-header-bg-color: var(--color-canvas);
-  --el-table-header-text-color: var(--color-text-muted);
-  font-size: 14px;
+/* 用户名一格：首字母圆标 + 账号 */
+.user-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.users-card :deep(.el-table th.el-table__cell) {
+.user-avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-user-bubble);
+  color: var(--color-text);
+  font-size: 12px;
+  font-style: normal;
   font-weight: 600;
+  text-transform: uppercase;
 }
 
-.users-card :deep(.el-pagination) {
-  margin-top: 20px;
-  overflow-x: auto;
+.user-name {
+  overflow: hidden;
+  font-weight: 500;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-tag {
+  margin: 3px 8px 3px 0;
+}
+
+.role-tag:last-child {
+  margin-right: 0;
+}
+
+/* 删除放在操作列最右，和前面的操作之间留一道细线：它是这里唯一无法撤回的动作 */
+.user-delete {
+  position: relative;
+  margin-left: 10px;
+  padding-left: 12px;
+}
+
+.user-delete::before {
+  position: absolute;
+  left: -6px;
+  width: 1px;
+  height: 12px;
+  background: var(--color-line);
+  content: '';
+}
+
+@media (max-width: 600px) {
+  .users-heading h1 {
+    font-size: 22px;
+  }
+
+  /* 窄屏两侧留白收一点，表格才放得下 */
+  .users-card :deep(.data-panel) {
+    padding: 0 12px;
+  }
 }
 </style>

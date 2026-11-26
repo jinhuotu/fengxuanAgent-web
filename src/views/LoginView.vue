@@ -19,9 +19,14 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
+// 仅本地开发用的预填账号密码：打开登录页自动带上，省得每次手输。
+// 注意：不要把这两行带进生产环境或提交到正式分支，真实密码不能写在前端源码里。
+const DEV_DEFAULT_USERNAME = 'admin'
+const DEV_DEFAULT_PASSWORD = 'Aa980210.0'
+
 const form = reactive({
-  username: '',
-  password: '',
+  username: DEV_DEFAULT_USERNAME,
+  password: DEV_DEFAULT_PASSWORD,
 })
 
 // 左侧品牌区的三条能力说明：只是文字，不随权限变化
@@ -67,11 +72,11 @@ async function handleSubmit(): Promise<void> {
 
 <template>
   <div class="login-page">
-    <!-- 左：品牌区，窄屏隐藏，把空间让给表单 -->
+    <!-- 左：品牌区，窄屏隐藏，把空间让给表单。墨色底 + 暖橙光晕，与工作台顶部横幅同一套 -->
     <aside class="login-intro" aria-label="产品介绍">
       <div class="intro-brand">
         <span class="brand-mark">锋</span>
-        <span>锋煊 Agent</span>
+        <span class="brand-name">锋煊 Agent<small>智能工作空间</small></span>
       </div>
 
       <div class="intro-copy">
@@ -108,7 +113,7 @@ async function handleSubmit(): Promise<void> {
             <el-input v-model="form.password" type="password" placeholder="至少 8 位" show-password autocomplete="current-password" />
           </el-form-item>
 
-          <el-button class="submit" type="primary" size="large" native-type="submit" :loading="submitting">
+          <el-button class="submit ink-button" type="primary" size="large" native-type="submit" :loading="submitting">
             登录
           </el-button>
         </el-form>
@@ -118,7 +123,7 @@ async function handleSubmit(): Promise<void> {
 </template>
 
 <style scoped>
-/* ---------- 整体：左右两栏，各占一半 ---------- */
+/* ---------- 整体：左右两栏，各占一半。底色用全站暖白 ---------- */
 .login-page {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
@@ -126,23 +131,44 @@ async function handleSubmit(): Promise<void> {
   background: var(--color-canvas);
 }
 
-/* ---------- 左侧品牌区：深蓝渐变，内容纵向三段 ---------- */
+/* ---------- 左侧品牌区：墨色圆角板浮在暖白底上，内容纵向三段 ---------- */
 .login-intro {
   display: flex;
   flex-direction: column;
-  padding: 48px 56px;
+  min-height: calc(100dvh - 32px);
+  margin: 16px;
+  padding: 36px 44px 28px;
+  border-radius: var(--radius-card);
   color: #ffffff;
+  /* 光晕颜色和工作台横幅一致：右上角一团暖橙，避免整块墨色显得沉 */
   background:
-    radial-gradient(circle at 85% 10%, rgba(120, 170, 255, 0.35) 0, transparent 45%),
-    linear-gradient(160deg, #14233d 0%, #1f3f80 60%, #2457cb 100%);
+    radial-gradient(circle at 88% -6%, rgba(214, 124, 86, 0.38) 0, transparent 46%),
+    var(--color-ink);
 }
 
 .intro-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1.2;
+}
+
+/* 全局的 .brand-mark 是墨色底，放在墨色板上会看不见，这里换成暖白底 */
+.intro-brand .brand-mark {
+  width: 38px;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--color-ink);
+}
+
+.brand-name small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .intro-copy {
@@ -152,16 +178,16 @@ async function handleSubmit(): Promise<void> {
 
 .intro-copy h1 {
   margin: 0 0 16px;
-  font-size: clamp(28px, 3vw, 40px);
-  font-weight: 700;
+  font-size: clamp(30px, 3vw, 42px);
+  font-weight: 650;
   line-height: 1.3;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.02em;
 }
 
 .intro-copy p {
   margin: 0;
   font-size: 15px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.66);
 }
 
 .intro-features {
@@ -184,28 +210,30 @@ async function handleSubmit(): Promise<void> {
   margin-top: 6px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: #9cc0ff;
-  box-shadow: 0 0 0 4px rgba(156, 192, 255, 0.2);
+  /* 圆点用全站的暖橙点缀色，和表单里的小标题呼应 */
+  background: var(--color-accent);
+  box-shadow: 0 0 0 4px rgba(201, 100, 66, 0.24);
 }
 
 .intro-features strong {
   display: block;
   font-size: 15px;
+  font-weight: 600;
 }
 
 .intro-features small {
   display: block;
   margin-top: 4px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .intro-footer {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.38);
 }
 
-/* ---------- 右侧表单区：卡片固定宽度并垂直居中 ---------- */
+/* ---------- 右侧表单区：卡片固定宽度并垂直居中，样子与改密码页的白卡一致 ---------- */
 .login-form-panel {
   display: flex;
   align-items: center;
@@ -219,21 +247,27 @@ async function handleSubmit(): Promise<void> {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
+  --el-card-border-color: var(--color-line);
+  --el-card-bg-color: var(--color-surface);
   --el-card-padding: 36px 36px 32px;
 }
 
+/* 小标题用暖橙，和工作台分区标签、改密码页同一种写法 */
 .form-eyebrow {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 2px;
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 .form-title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
 }
 
 .form-subtitle {
@@ -247,9 +281,12 @@ async function handleSubmit(): Promise<void> {
   color: var(--color-text);
 }
 
+/* 登录是这一页唯一的主动作，用墨色实心按钮，高度比默认再高一点更好点 */
 .submit {
   width: 100%;
+  height: 44px;
   margin-top: 8px;
+  font-size: 15px;
 }
 
 /* ---------- 窄屏：隐藏品牌区，表单占满 ---------- */

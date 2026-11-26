@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { isAxiosError } from 'axios'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
@@ -20,6 +20,7 @@ import type { KnowledgeBase } from '@/types/knowledge'
 import { resolveMessageReferences } from '@/utils/chatReferences'
 import { isNearBottom } from '@/utils/chatScroll'
 import { loadKnowledgeBasePages } from '@/utils/knowledgePages'
+import { referenceScoreLabel } from '@/utils/knowledgeView'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -47,12 +48,58 @@ const deletingIds = reactive(new Set<number>())
 const clearingSessions = ref(false)
 const knowledgeErrors = reactive<Record<number, string>>({})
 const selectedKnowledgeBaseId = computed(currentKnowledgeBaseId)
+// 做什么：取所选知识库的名字，写进输入框的提示语
+// 入参：无，使用所选库编号和已加载的库列表
+// 返回：库名；没选或库已失效时返回空字符串
+const selectedKnowledgeName = computed(shownKnowledgeName)
+
+// 做什么：查找所选知识库的名称
+// 入参：无
+// 返回：库名或空字符串
+function shownKnowledgeName(): string {
+  return knowledgeBases.value.find((base) => base.id === selectedKnowledgeBaseId.value)?.name ?? ''
+}
+
+// 做什么：给出输入框里的提示语，如实说明这一问会不会带知识库
+// 入参：无，使用所选库名
+// 返回：选了库提示"基于某库提问"；没选库时后端不做检索，只提示直接输入
+const composerPlaceholder = computed(shownComposerPlaceholder)
+
+// 做什么：拼出输入框的提示语
+// 入参：无
+// 返回：提示语字符串
+function shownComposerPlaceholder(): string {
+  return selectedKnowledgeName.value ? `基于「${selectedKnowledgeName.value}」提问` : '输入你的问题，直接向助手提问'
+}
+
+// 做什么：给出输入框下方的一行说明，如实说明回答的依据来源
+// 入参：无，使用所选库名
+// 返回：选了库说明依据该库；没选库说明回答来自模型自身知识
+const composerNote = computed(shownComposerNote)
+
+// 做什么：拼出输入框下方的说明文字
+// 入参：无
+// 返回：说明字符串
+function shownComposerNote(): string {
+  return selectedKnowledgeBaseId.value
+    ? '回答依据所选知识库生成，请留意核实。切换会话可并行生成。'
+    : '未选择知识库，回答来自模型自身知识，请留意核实。切换会话可并行生成。'
+}
+// 还没有会话时用户先选的库；undefined 表示没选过。发出第一问、会话建好后再替用户保存
+const pendingKnowledgeBaseId = ref<number | null | undefined>(undefined)
 const knowledgeTruncated = ref(false)
 const KNOWLEDGE_PAGE_SIZE = 50
 const KNOWLEDGE_MAX_PAGES = 4
 const MAX_INPUT_LENGTH = 4000
 // 引用列表只在流式内容变化时重算一次，模板按消息键取值
 const messageReferences = computed(buildReferenceMap)
+const NARROW_VIEWPORT_QUERY = '(max-width: 900px)'
+// 窄屏媒体查询对象：窄屏放不下侧栏里的会话历史，列表要改回本页顶部
+const narrowViewportQuery = typeof window === 'undefined' ? undefined : window.matchMedia(NARROW_VIEWPORT_QUERY)
+const isNarrowViewport = ref(narrowViewportQuery?.matches ?? false)
+const sessionSlotTarget = computed(() => (isNarrowViewport.value ? '#chat-session-slot' : '#workspace-sidebar-extension'))
+// 用户手动收起引用面板后为 true；换会话或来了新回答时自动恢复
+const referencePanelDismissed = ref(false)
 // 字数提示只在接近上限时出现，平时不占视线
 const showInputCounter = computed(() => state.current.draft.length > MAX_INPUT_LENGTH * 0.8)
 const inputRules: FormRules = {
@@ -71,12 +118,55 @@ function listGeneratingSessionIds(): number[] {
   return [...new Set([...localIds, ...remoteIds])]
 }
 
-// 做什么：把空状态里点选的建议提问填进输入框，由用户决定是否修改后再发送
+// 做什么：空状态里点一条建议后直接发出去，不用先点"新建对话"
 // 入参：建议的完整问题
-// 返回：无；页面正在生成时不覆盖输入
-function fillDraft(question: string): void {
+// 返回：无；页面正在生成时不发送
+async function sendSuggestion(question: string): Promise<void> {
   if (conversationBusy.value) return
   state.current.draft = question
+  await nextTick()
+  await submitQuestion()
+}
+
+// 做什么：响应浏览器窗口跨过窄屏分界线，切换会话列表的安放位置
+// 入参：媒体查询的变化事件
+// 返回：无，只更新是否窄屏
+function syncViewportWidth(event: MediaQueryListEvent): void {
+  isNarrowViewport.value = event.matches
+}
+
+// 做什么：取最近一条带引用的回答的引用，给右侧常驻面板用
+// 入参：无，读取消息与引用表
+// 返回：引用列表；没有任何引用时返回共用的空数组
+function latestReferences(): ChatReference[] {
+  for (let index = state.current.messages.length - 1; index >= 0; index -= 1) {
+    const message = state.current.messages[index]
+    if (!message) continue
+    const references = messageReferences.value.get(messageKey(message))
+    if (references?.length) return references
+  }
+  return EMPTY_REFERENCES
+}
+
+// 做什么：生成当前会话的显示标题
+// 入参：无，读取会话列表与当前会话编号
+// 返回：会话标题；没有会话或标题为空时返回"新对话"
+function conversationHeading(): string {
+  return state.sessions.find((session) => session.id === state.selectedId)?.title?.trim() || '新对话'
+}
+
+const panelReferences = computed(latestReferences)
+const conversationTitle = computed(conversationHeading)
+const isEmptyState = computed(() => !state.current.messages.length && !state.current.loadingHistory)
+// 窄屏没有右侧面板的位置，引用仍走每条回答下方的那颗胶囊
+const referencePanelVisible = computed(() =>
+  panelReferences.value.length > 0 && !referencePanelDismissed.value && !isNarrowViewport.value)
+
+// 做什么：换会话或开始新一轮回答时，把收起的引用面板重新打开
+// 入参：无，由会话编号与引用所属请求的变化触发
+// 返回：无
+function restoreReferencePanel(): void {
+  referencePanelDismissed.value = false
 }
 
 // 做什么：记录用户是否停在消息列表底部，用于决定要不要继续自动跟随
@@ -132,14 +222,29 @@ function messageKey(message: ChatMessage): string {
   return `${message.request_id}-${message.role}`
 }
 
-// 做什么：通过 Element Plus 表单校验后发送问题
+// 做什么：通过 Element Plus 表单校验后发送问题；还没有会话时先建一个再发
 // 入参：无，读取页面表单
 // 返回：无；校验失败留在输入框，发送错误由页面状态展示
 async function submitQuestion(): Promise<void> {
   if (conversationBusy.value || !form.value) return
-  const sessionId = state.selectedId
   const valid = await form.value.validate().catch(() => false)
-  if (valid && sessionId === state.selectedId) await chat.sendMessage()
+  if (!valid) return
+  // 新手注意：新建会话会切换到一个全新的会话对象，输入框里的草稿会跟着清空，
+  // 所以先存一份，建完再放回去，用户打的字才不会丢。
+  const draft = state.current.draft
+  if (!state.selectedId) {
+    await chat.newSession()
+    // 新建的会话排在列表最前；如果当前选中的不是它，说明用户中途切去了别的会话，这一问不能发过去
+    const createdSessionId = state.sessions[0]?.id
+    if (!state.selectedId || state.selectedId !== createdSessionId) {
+      state.current.draft = draft
+      ElMessage.info('会话已切换，问题没有发出，可以直接再发一次')
+      return
+    }
+    state.current.draft = draft
+    await applyPendingKnowledgeBase()
+  }
+  await chat.sendMessage()
 }
 
 // 做什么：把选中会话写入地址栏，使刷新可以恢复
@@ -230,11 +335,22 @@ function startTabIdentity(userId: number | undefined): void {
   chat.startTabSync(userId ?? null)
 }
 
-// 做什么：按后端会话列表取得当前所选知识库
+// 做什么：取得界面应当显示的所选知识库
 // 入参：无，使用当前会话编号
-// 返回：已保存的库编号；未选库时返回 null
+// 返回：已保存的库编号；还没有会话时返回用户先选的库；都没有时返回 null
 function currentKnowledgeBaseId(): number | null {
-  return state.sessions.find((session) => session.id === state.selectedId)?.knowledge_base_id ?? null
+  return state.sessions.find((session) => session.id === state.selectedId)?.knowledge_base_id
+    ?? pendingKnowledgeBaseId.value ?? null
+}
+
+// 做什么：会话刚建好时，把用户在空状态下先选的知识库保存进去
+// 入参：无，读取并清空先选的库
+// 返回：无；没选过或保存失败都不影响问题发出，失败提示留在下拉上
+async function applyPendingKnowledgeBase(): Promise<void> {
+  if (pendingKnowledgeBaseId.value === undefined) return
+  const knowledgeBaseId = pendingKnowledgeBaseId.value
+  pendingKnowledgeBaseId.value = undefined
+  await changeKnowledgeBase(knowledgeBaseId)
 }
 
 // 做什么：挂载后按页加载知识库，最多取满上限页数
@@ -256,10 +372,14 @@ async function loadKnowledgeBases(): Promise<void> {
 
 // 做什么：保存下拉选择，并把失败提示留在发起请求的会话
 // 入参：知识库编号或表示清除选择的 null
-// 返回：无；失败时保留后端已有的选择
+// 返回：无；还没有会话时只记下选择，等第一问发出时再保存；失败时保留后端已有的选择
 async function changeKnowledgeBase(knowledgeBaseId: number | null): Promise<void> {
   const sessionId = state.selectedId
-  if (!sessionId || knowledgeChanges.has(sessionId)) return
+  if (!sessionId) {
+    pendingKnowledgeBaseId.value = knowledgeBaseId
+    return
+  }
+  if (knowledgeChanges.has(sessionId)) return
   knowledgeChanges.add(sessionId)
   delete knowledgeErrors[sessionId]
   try {
@@ -283,6 +403,7 @@ function mountChat(): void {
   }
   startTabIdentity(authStore.currentUser?.id)
   window.addEventListener('pagehide', chat.stopAllGenerations)
+  narrowViewportQuery?.addEventListener('change', syncViewportWidth)
   void chat.initialize()
   void loadKnowledgeBases()
 }
@@ -292,6 +413,7 @@ function mountChat(): void {
 // 返回：无；销毁操作可以重复执行
 function unmountChat(): void {
   window.removeEventListener('pagehide', chat.stopAllGenerations)
+  narrowViewportQuery?.removeEventListener('change', syncViewportWidth)
   // 取消排队中的滚动帧，避免页面卸载后回调仍去碰已销毁的容器
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame)
@@ -313,6 +435,7 @@ watch(() => state.current.messages.length, () => {
 })
 watch(() => state.unauthorized, handleUnauthorized)
 watch(() => state.accountChanged, handleAccountChanged)
+watch([() => state.selectedId, () => state.current.referencesRequestId], restoreReferencePanel)
 watch(() => authStore.currentUser?.id, startTabIdentity, { immediate: true })
 onMounted(mountChat)
 onBeforeRouteLeave(chat.dispose)
@@ -321,19 +444,27 @@ onBeforeUnmount(unmountChat)
 
 <template>
   <div class="chat-page">
-    <!-- 左：会话列表，直接放在灰色底上，不再套一层卡片 -->
-    <ChatSessionList :sessions="state.sessions" :selected-id="state.selectedId" :total="state.sessionTotal"
-      :loading="state.loading" :creating="state.creating" :clearing="clearingSessions"
-      :generating-session-ids="generatingSessionIds" :deleting-session-ids="[...deletingIds]"
-      @create="chat.newSession" @select="chat.selectSession" @more="chat.loadSessions(true)"
-      @delete="confirmDeleteSession" @clearing="confirmClearSessions" />
+    <!-- 窄屏（≤900px）时侧栏放不下会话历史，列表回到本页顶部；宽屏时这个槽是空的，不占位 -->
+    <div id="chat-session-slot" class="chat-session-slot"></div>
 
-    <!-- 右：白色对话面板 -->
-    <section class="conversation-panel" aria-label="对话内容">
-      <ChatKnowledgeSelect :bases="knowledgeBases" :selected-id="selectedKnowledgeBaseId" :truncated="knowledgeTruncated"
-        :loading="knowledgeLoading" :failed="knowledgeLoadFailed" :error="knowledgeErrors[state.selectedId] ?? ''"
-        :disabled="!state.selectedId || conversationBusy || generatingSessionIds.includes(state.selectedId) || knowledgeChanges.has(state.selectedId)"
-        @change="changeKnowledgeBase" />
+    <!-- 新手注意：Teleport 像"把一块内容搬到别处显示"。
+      宽屏时会话历史被搬进左侧栏的插槽，侧栏和会话列表就合成了一栏；
+      状态仍然归本页管，不用把会话逻辑拆出去。 -->
+    <Teleport :to="sessionSlotTarget" defer>
+      <ChatSessionList :sessions="state.sessions" :selected-id="state.selectedId" :total="state.sessionTotal"
+        :loading="state.loading" :creating="state.creating" :clearing="clearingSessions"
+        :generating-session-ids="generatingSessionIds" :deleting-session-ids="[...deletingIds]"
+        @create="chat.newSession" @select="chat.selectSession" @more="chat.loadSessions(true)"
+        @delete="confirmDeleteSession" @clearing="confirmClearSessions" />
+    </Teleport>
+
+    <!-- 对话区：直接铺在页面底色上，不再套白色卡片 -->
+    <section class="conversation-panel" :class="{ 'is-empty': isEmptyState }" aria-label="对话内容">
+      <header class="chat-header">
+        <h1 class="chat-title" :title="conversationTitle">{{ conversationTitle }}</h1>
+        <button v-if="panelReferences.length && referencePanelDismissed" type="button" class="reference-reopen"
+          aria-label="展开参考资料" @click="restoreReferencePanel">参考资料 {{ panelReferences.length }}</button>
+      </header>
       <el-alert v-if="state.current.error" class="chat-alert" :title="state.current.error" type="error" :closable="false" show-icon />
       <el-alert v-if="state.current.contextNotice" class="chat-alert" :title="state.current.contextNotice" type="info" :closable="false" show-icon />
       <div v-if="state.current.syncingHistory || state.current.historySyncError" class="result-confirmation" role="status">
@@ -354,9 +485,10 @@ onBeforeUnmount(unmountChat)
         <div class="message-column">
           <ChatHistorySkeleton v-if="state.current.loadingHistory && !state.current.messages.length" />
 
-          <ChatEmptyState v-if="!state.selectedId || (!state.current.messages.length && !state.current.loadingHistory)"
-            :has-session="state.selectedId > 0" :creating="state.creating"
-            @create="chat.newSession" @pick="fillDraft" />
+          <ChatEmptyState v-if="!state.selectedId || isEmptyState"
+            :has-session="state.selectedId > 0" :busy="state.creating || conversationBusy"
+            :knowledge-picked="selectedKnowledgeBaseId !== null"
+            @pick="sendSuggestion" />
 
           <div v-if="state.current.loadingHistory && state.current.messages.length" class="load-older" aria-hidden="true">
             <span class="history-dots"><i></i><i></i><i></i></span>
@@ -381,43 +513,72 @@ onBeforeUnmount(unmountChat)
         </button>
       </transition>
       <ChatReferenceDrawer v-bind="referencePreview" v-model:visible="referencePreview.visible" />
-      <!-- 输入区：悬浮卡片，输入框和按钮在同一张卡里 -->
+      <!-- 输入区：一整张圆角卡片，知识库选择和发送按钮在底部工具条两端 -->
       <div class="composer-wrap">
         <el-form ref="form" :model="state.current" :rules="inputRules" class="composer" @submit.prevent="submitQuestion">
           <el-form-item prop="draft">
             <el-input v-model="state.current.draft" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }"
               :maxlength="MAX_INPUT_LENGTH" resize="none" aria-label="输入你的问题"
-              placeholder="输入问题，Ctrl + Enter 发送"
-              :disabled="!state.selectedId || conversationBusy || state.current.loadingHistory"
+              :placeholder="composerPlaceholder"
+              :disabled="conversationBusy || state.current.loadingHistory"
               @keydown.ctrl.enter.prevent="submitQuestion" />
           </el-form-item>
           <div class="composer-toolbar">
+            <!-- 知识库决定这一问去哪里找资料，所以放在输入框里、紧挨着发送，而不是页面角落 -->
+            <ChatKnowledgeSelect :bases="knowledgeBases" :selected-id="selectedKnowledgeBaseId" :truncated="knowledgeTruncated"
+              :loading="knowledgeLoading" :failed="knowledgeLoadFailed" :error="knowledgeErrors[state.selectedId] ?? ''"
+              :disabled="conversationBusy || generatingSessionIds.includes(state.selectedId) || knowledgeChanges.has(state.selectedId)"
+              @change="changeKnowledgeBase" />
             <span class="composer-hint">
               Ctrl + Enter 发送
               <span v-if="showInputCounter" class="composer-count">{{ state.current.draft.length }} / {{ MAX_INPUT_LENGTH }}</span>
             </span>
             <el-button v-if="state.current.sending" round :disabled="state.current.confirming" @click="chat.stopGeneration">停止生成</el-button>
-            <el-button v-else type="primary" round native-type="submit" class="send-button"
-              :disabled="!state.selectedId || conversationBusy || state.current.loadingHistory || !state.current.draft.trim()">发送</el-button>
+            <el-button v-else type="primary" round native-type="submit" class="send-button ink-button"
+              :disabled="conversationBusy || state.current.loadingHistory || !state.current.draft.trim()">发送</el-button>
           </div>
         </el-form>
-        <p class="composer-note">切换会话可并行生成；离开或关闭仅中断本页面发起的任务。AI 回答请注意核实。</p>
+        <p class="composer-note">{{ composerNote }}</p>
       </div>
     </section>
+
+    <!-- 右侧常驻的参考资料：边读边核对原文，不用每次点开抽屉 -->
+    <aside v-if="referencePanelVisible" class="reference-panel" aria-label="参考资料">
+      <div class="reference-panel-head">
+        <span>参考资料 {{ panelReferences.length }}</span>
+        <button type="button" class="reference-panel-close" aria-label="收起参考资料" title="收起" @click="referencePanelDismissed = true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <ol class="reference-cards">
+        <li v-for="reference in panelReferences" :key="reference.index">
+          <button type="button" class="reference-card" :aria-label="`查看第 ${reference.index} 条参考资料原文`"
+            @click="openReference(reference)">
+            <span class="reference-card-index">{{ reference.index }}</span>
+            <span class="reference-card-body">
+              <strong>{{ reference.heading_path }}</strong>
+              <small>相关度 {{ referenceScoreLabel(reference.score) }} · 查看原文</small>
+            </span>
+          </button>
+        </li>
+      </ol>
+    </aside>
   </div>
 </template>
 
 <style scoped>
-/* ---------- 骨架：左列表固定宽，右面板占满 ---------- */
+/* ---------- 骨架：对话区占满，右侧引用面板按需出现 ---------- */
 .chat-page {
   display: flex;
-  gap: 16px;
   height: 100%;
   min-height: 0;
   color: var(--color-text);
 }
 
-/* ---------- 右侧对话面板 ---------- */
+.chat-session-slot:empty {
+  display: none;
+}
+
 .conversation-panel {
   position: relative;
   display: flex;
@@ -426,13 +587,53 @@ onBeforeUnmount(unmountChat)
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
 }
 
+/* ---------- 顶部：会话标题 + 知识库选择 ---------- */
+.chat-header {
+  display: flex;
+  align-items: center;
+  flex: 0 0 56px;
+  gap: 16px;
+  padding: 0 28px;
+}
+
+.chat-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-reopen {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.reference-reopen:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ---------- 消息列：居中，最宽 768px，一行约 40 个汉字 ---------- */
 .chat-alert {
-  margin: 14px 24px 0;
+  width: 100%;
+  max-width: calc(var(--reading-width) + 56px);
+  margin: 10px auto 0;
 }
 
 .result-confirmation {
@@ -440,7 +641,10 @@ onBeforeUnmount(unmountChat)
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 24px 0;
+  width: 100%;
+  max-width: calc(var(--reading-width) + 56px);
+  margin: 0 auto;
+  padding: 10px 28px 0;
   color: var(--color-text-muted);
   font-size: 13px;
 }
@@ -451,19 +655,14 @@ onBeforeUnmount(unmountChat)
   overflow-y: auto;
   /* 滚到边界时不让整页跟着弹动，对话区自己收住滚动 */
   overscroll-behavior: contain;
-  padding: 28px 0 20px;
+  padding: 20px 0 8px;
 }
 
-/*
- * 内容列：不再写死窄宽度，而是占满面板、只在两侧留内边距。
- * clamp(最小值, 随面板宽度变化的值, 最大值)：面板越宽留白越多，但最多 72px，避免大屏两侧大片空白。
- * max-width 1040px 是上限：一行约 60 个汉字，再宽读长回答会串行。
- */
 .message-column {
   width: 100%;
-  max-width: 1040px;
+  max-width: var(--reading-width);
   margin: 0 auto;
-  padding: 0 clamp(24px, 5%, 72px);
+  padding: 0 28px;
 }
 
 .load-older {
@@ -479,7 +678,7 @@ onBeforeUnmount(unmountChat)
   gap: 5px;
   padding: 6px 14px;
   border-radius: var(--radius-pill);
-  background: var(--color-canvas);
+  background: var(--color-hover);
 }
 
 .history-dots i {
@@ -511,7 +710,7 @@ onBeforeUnmount(unmountChat)
 /* ---------- 回到最新：浮在输入区上方，不遮挡消息 ---------- */
 .jump-latest {
   position: absolute;
-  bottom: 148px;
+  bottom: 132px;
   left: 50%;
   display: inline-flex;
   align-items: center;
@@ -530,7 +729,7 @@ onBeforeUnmount(unmountChat)
 }
 
 .jump-latest:hover {
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .jump-latest svg {
@@ -553,29 +752,28 @@ onBeforeUnmount(unmountChat)
   transform: translate(-50%, 6px);
 }
 
-/* ---------- 输入区：悬浮卡片，聚焦时描边发光 ---------- */
-/* 输入区外边距：与消息列的左右留白保持一致，视觉上才像同一列 */
+/* ---------- 输入区：一整张圆角卡片，聚焦时描边加深 ---------- */
 .composer-wrap {
   flex-shrink: 0;
-  padding: 8px clamp(16px, 5%, 72px) 14px;
+  width: 100%;
+  max-width: var(--reading-width);
+  margin: 0 auto;
+  padding: 6px 28px 12px;
 }
 
-/* 输入卡片与消息列同宽，这样输入框的左右边缘和回答文字对齐 */
 .composer {
   width: 100%;
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 6px 10px 8px 16px;
+  padding: 6px 10px 8px 18px;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
+  border-radius: 20px;
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .composer:focus-within {
-  border-color: var(--color-primary-light-7);
-  box-shadow: 0 0 0 3px var(--color-primary-soft), var(--shadow-card);
+  border-color: #cfc9bd;
+  box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.05), var(--shadow-card);
 }
 
 .composer :deep(.el-form-item) {
@@ -584,7 +782,7 @@ onBeforeUnmount(unmountChat)
 
 /* 去掉 Element Plus 文本域自带的边框，让输入框和卡片融为一体 */
 .composer :deep(.el-textarea__inner) {
-  padding: 8px 0;
+  padding: 9px 0;
   border: 0;
   background: transparent;
   box-shadow: none !important;
@@ -593,16 +791,21 @@ onBeforeUnmount(unmountChat)
   resize: none;
 }
 
+/* 工具条：左边知识库胶囊，中间快捷键提示占满剩余宽度，右边发送按钮 */
 .composer-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  padding: 0 2px 2px 0;
 }
 
 .composer-hint {
+  flex: 1;
+  min-width: 0;
+  padding-left: 6px;
   font-size: 12px;
   color: var(--color-text-faint);
+  text-align: right;
 }
 
 /* 接近上限才显示字数，颜色提醒"快到头了" */
@@ -613,22 +816,169 @@ onBeforeUnmount(unmountChat)
 }
 
 .send-button {
-  min-width: 84px;
+  min-width: 76px;
 }
 
 .composer-note {
-  max-width: 1040px;
-  margin: 8px auto 0;
+  margin: 8px 0 0;
   font-size: 11px;
   color: var(--color-text-faint);
   text-align: center;
 }
 
-/* ---------- 窄屏：会话列表横排在上方 ---------- */
+/*
+ * 空状态：问候、建议和输入框作为一组放在对话区的垂直中间。
+ * 做法是让标题栏的下方留白、输入区的下方留白都自动伸展（margin-bottom: auto），
+ * 两组自动留白平分剩余空间，中间的内容就被推到正中。
+ */
+.conversation-panel.is-empty .chat-header {
+  margin-bottom: auto;
+}
+
+.conversation-panel.is-empty .message-list {
+  flex: 0 0 auto;
+  overflow: visible;
+  padding-top: 0;
+}
+
+.conversation-panel.is-empty .composer-wrap {
+  margin-bottom: auto;
+}
+
+/* ---------- 右侧参考资料面板 ---------- */
+.reference-panel {
+  display: flex;
+  flex: 0 0 312px;
+  flex-direction: column;
+  min-height: 0;
+  margin: 56px 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.reference-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  padding: 14px 12px 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reference-panel-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.reference-panel-close:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.reference-panel-close svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.reference-cards {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 10px 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* 引用卡：左边是正文里对应的编号，右边是出处和相关度 */
+.reference-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px 10px 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.reference-card:hover {
+  background: var(--color-hover);
+}
+
+.reference-card-index {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border-radius: 6px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.reference-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.reference-card-body strong {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.reference-card-body small {
+  font-size: 12px;
+  color: var(--color-text-faint);
+}
+
+/*
+ * 中等宽度：侧栏 264 + 阅读列 768 + 面板 312 放不下，常驻面板会把对话列挤到 400 以下。
+ * 1280 以下不显示常驻面板，引用仍可通过每条回答下方的"参考资料"展开。
+ */
+@media (max-width: 1279px) {
+  .reference-panel,
+  .reference-reopen {
+    display: none;
+  }
+}
+
+/* ---------- 窄屏：会话列表横排在上方，引用走每条回答下方的胶囊 ---------- */
 @media (max-width: 900px) {
   .chat-page {
     flex-direction: column;
-    gap: 12px;
+  }
+
+  .chat-header {
+    padding: 0 16px;
   }
 
   .message-column {
@@ -636,7 +986,11 @@ onBeforeUnmount(unmountChat)
   }
 
   .composer-wrap {
-    padding: 8px 14px 12px;
+    padding: 6px 14px 10px;
+  }
+
+  .jump-latest {
+    bottom: 140px;
   }
 }
 </style>

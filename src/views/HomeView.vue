@@ -118,8 +118,8 @@ const visibleEntries = computed(() => {
   border-radius: var(--radius-card);
   color: #ffffff;
   background:
-    radial-gradient(circle at 90% 0%, rgba(140, 185, 255, 0.4) 0, transparent 50%),
-    linear-gradient(120deg, #14233d 0%, #1f3f80 70%, #2457cb 100%);
+    radial-gradient(circle at 92% -10%, rgba(214, 124, 86, 0.34) 0, transparent 48%),
+    var(--color-ink);
 }
 
 .welcome-panel .section-label {
@@ -167,7 +167,7 @@ const visibleEntries = computed(() => {
 
 .entry-card:hover {
   transform: translateY(-2px);
-  border-color: var(--color-primary-light-7);
+  border-color: var(--color-text-faint);
   box-shadow: var(--shadow-float);
 }
 
@@ -191,8 +191,8 @@ const visibleEntries = computed(() => {
 }
 
 .accent-blue .entry-icon {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
 }
 
 .accent-green .entry-icon {
@@ -226,20 +226,19 @@ const visibleEntries = computed(() => {
 
 .entry-card:hover .entry-arrow {
   transform: translateX(3px);
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 /* ---------- 账号信息 ---------- */
 .account-card {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
   --el-card-padding: 26px 28px;
 }
 
 .account-card h2 {
   margin: 0 0 16px;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
 }
 

@@ -76,7 +76,7 @@ function toggleReferences(): void {
             </li>
           </ul>
         </div>
-        <el-button v-if="canRetry" text :disabled="retryDisabled" @click="emit('retry', message.request_id)">重新发送此问题</el-button>
+        <el-button v-if="canRetry" text :disabled="retryDisabled" class="retry-button" @click="emit('retry', message.request_id)">重新生成</el-button>
       </div>
     </template>
   </article>
@@ -85,20 +85,20 @@ function toggleReferences(): void {
 <style scoped>
 .message {
   display: flex;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .message.user {
   justify-content: flex-end;
 }
 
-/* 用户气泡：最多占列宽 78%，右下角收小表示"是我说的" */
+/* 用户气泡：中性浅灰。以前用品牌浅蓝，和蓝色按钮、蓝色选中项挤在一起，全页没有重点 */
 .user-bubble {
-  max-width: 78%;
-  padding: 11px 16px;
-  border-radius: 16px 16px 4px 16px;
-  background: var(--color-primary-soft);
-  color: #1b3d8f;
+  max-width: 80%;
+  padding: 10px 16px;
+  border-radius: 18px 18px 6px 18px;
+  background: var(--color-user-bubble);
+  color: var(--color-user-bubble-text);
   font-size: 15px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -111,42 +111,60 @@ function toggleReferences(): void {
 }
 
 .assistant-avatar {
-  width: 34px;
-  height: 34px;
-  margin-top: 2px;
-  border-radius: 10px;
-  font-size: 15px;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  border-radius: 8px;
+  font-size: 12px;
 }
 
 .assistant-body {
   flex: 1;
   min-width: 0;
-  padding-top: 3px;
 }
 
+/* 身份行压到 12px：它只是标注"这是谁说的"，不该比正文还抢眼 */
 .assistant-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.model-badge {
-  padding: 1px 8px;
-  border: 1px solid var(--color-line);
-  border-radius: 999px;
-  background: var(--color-canvas);
-  font-size: 11px;
-  font-weight: 400;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
+.model-badge {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-faint);
+}
+
+.model-badge::before {
+  content: '·';
+  margin-right: 8px;
+}
+
 .message-content {
-  font-size: 15px;
-  line-height: 1.8;
+  font-size: 16px;
+  line-height: 1.75;
   overflow-wrap: anywhere;
+}
+
+/* 操作按钮平时隐藏，鼠标移到这条消息上才出现，长对话里少一排排干扰 */
+.retry-button {
+  margin-top: 6px;
+  margin-left: -8px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.message:hover .retry-button,
+.retry-button:focus-visible {
+  opacity: 1;
 }
 
 /* ---------- Markdown 正文样式 ----------
@@ -160,13 +178,25 @@ function toggleReferences(): void {
   margin-bottom: 0;
 }
 
+/* 回答里最多用到三级标题：字号逐级收小，和 16px 正文拉开层级 */
 .markdown-body :deep(h1),
 .markdown-body :deep(h2),
 .markdown-body :deep(h3) {
-  margin: 18px 0 8px;
-  font-size: 16px;
+  margin: 22px 0 8px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.45;
+}
+
+.markdown-body :deep(h1) {
+  font-size: 20px;
+}
+
+.markdown-body :deep(h2) {
+  font-size: 18px;
+}
+
+.markdown-body :deep(h3) {
+  font-size: 16.5px;
 }
 
 .markdown-body :deep(h1:first-child),
@@ -187,7 +217,7 @@ function toggleReferences(): void {
 
 .markdown-body :deep(strong) {
   font-weight: 600;
-  color: #16243b;
+  color: var(--color-text);
 }
 
 .markdown-body :deep(em) {

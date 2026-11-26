@@ -37,6 +37,8 @@ const navigationItems = [
 ]
 const visibleNavigation = computed(availableNavigation)
 const pageTitle = computed(() => String(route.meta.title || '工作台'))
+// 对话页自己带标题栏和输入区，侧栏中段也让给会话历史，所以外壳要按路由区分
+const isChatRoute = computed(() => route.name === 'chat')
 const displayName = computed(() => authStore.currentUser?.display_name || authStore.currentUser?.username || '当前用户')
 
 // 做什么：按已加载权限生成侧栏菜单
@@ -88,7 +90,7 @@ onMounted(loadWorkspace)
 </script>
 
 <template>
-  <div class="app-layout">
+  <div class="app-layout" :class="{ 'is-chat': isChatRoute }">
     <!-- 新手注意：左边是固定的"菜单外壳"，右边是可替换的"展板"。 -->
     <aside class="app-sidebar">
       <RouterLink to="/home" class="sidebar-brand" aria-label="锋煊 Agent 平台首页">
@@ -106,19 +108,14 @@ onMounted(loadWorkspace)
         </RouterLink>
       </nav>
 
+      <!-- 对话页的会话历史由 ChatView 放进这个插槽：状态仍归对话页管，这里只占位 -->
+      <div id="workspace-sidebar-extension" class="sidebar-extension"></div>
+
       <SidebarAccount :display-name="displayName" :logging-out="loggingOut" @logout="logout" />
     </aside>
 
     <section class="workspace">
-      <header class="workspace-header">
-        <div class="breadcrumb">
-          <span class="breadcrumb-root">锋煊 Agent 平台</span>
-          <span class="breadcrumb-divider">/</span>
-          <strong>{{ pageTitle }}</strong>
-        </div>
-        <span class="header-account">{{ displayName }}</span>
-      </header>
-
+      <!-- 每个页面自带标题（对话页是会话标题，其余是页面主标题），这里不再放一条外壳标题条，避免同名标题出现两次 -->
       <main class="workspace-content" :class="{ 'chat-content': route.name === 'chat' }" :aria-label="pageTitle">
         <el-skeleton v-if="loading" :rows="6" animated class="page-loading" aria-label="正在加载工作空间" />
         <div v-else-if="loadError" class="workspace-error">
@@ -145,8 +142,8 @@ onMounted(loadWorkspace)
 .app-sidebar {
   display: flex;
   flex-direction: column;
-  flex: 0 0 240px;
-  padding: 18px 14px 14px;
+  flex: 0 0 264px;
+  padding: 18px 12px 12px;
   background: var(--color-sidebar);
   border-right: 1px solid var(--color-line);
 }
@@ -156,13 +153,13 @@ onMounted(loadWorkspace)
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 2px 8px 20px;
+  padding: 2px 8px 18px;
   color: var(--color-text);
   text-decoration: none;
 }
 
 .brand-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -172,15 +169,15 @@ onMounted(loadWorkspace)
   margin-top: 3px;
   font-size: 11px;
   font-weight: 400;
-  letter-spacing: 1px;
   color: var(--color-text-faint);
 }
 
-/* ---------- 菜单：激活项是白底卡片，hover 只淡淡加深 ---------- */
+/* ---------- 菜单：激活项只铺一层浅底，不再用"白卡片 + 阴影"，侧栏才不会一块块凸起 ---------- */
 .sidebar-navigation {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  margin-top: 6px;
 }
 
 .navigation-label {
@@ -193,25 +190,24 @@ onMounted(loadWorkspace)
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 42px;
-  padding: 0 12px;
-  border-radius: var(--radius-control);
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
   color: var(--color-text-muted);
   font-size: 14px;
   text-decoration: none;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .menu-item:hover {
-  background: rgba(20, 35, 61, 0.05);
+  background: var(--color-hover);
   color: var(--color-text);
 }
 
 .menu-item.router-link-active {
-  background: var(--color-surface);
-  color: var(--color-primary);
+  background: var(--color-hover);
+  color: var(--color-text);
   font-weight: 600;
-  box-shadow: var(--shadow-card);
 }
 
 .menu-item svg {
@@ -225,65 +221,52 @@ onMounted(loadWorkspace)
   stroke-linejoin: round;
 }
 
-/* ---------- 右侧：顶部标题条 + 可滚动内容 ---------- */
+/* 会话历史插槽：非对话页不占位 */
+.sidebar-extension {
+  display: none;
+}
+
+/* ---------- 对话页：会话历史紧跟品牌，功能菜单沉到侧栏底部 ---------- */
+.app-layout.is-chat .sidebar-extension {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 16px;
+  order: 1;
+}
+
+.app-layout.is-chat .sidebar-navigation {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-line);
+  order: 2;
+}
+
+.app-layout.is-chat .sidebar-bottom {
+  order: 3;
+}
+
+/* ---------- 右侧：可滚动内容（标题由各页面自己渲染） ---------- */
 .workspace {
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
-}
-
-.workspace-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex: 0 0 56px;
-  gap: 20px;
-  padding: 0 32px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-line);
-}
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-}
-
-.breadcrumb-root,
-.header-account {
-  color: var(--color-text-faint);
-}
-
-.breadcrumb-divider {
-  color: var(--color-line);
-}
-
-.breadcrumb strong {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.header-account {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .workspace-content {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 24px 32px 32px;
+  padding: 32px 36px 40px;
 }
 
-/* 对话页要自己管理滚动，所以去掉外层内边距并禁止外层滚动 */
+/* 对话页自己管理滚动和留白，外壳不再包一层 */
 .workspace-content.chat-content {
   overflow: hidden;
-  padding: 16px 20px 20px;
+  padding: 0;
 }
 
 .page-loading {
@@ -299,13 +282,13 @@ onMounted(loadWorkspace)
 /* ---------- 窄屏：侧栏收成只剩图标 ---------- */
 @media (max-width: 900px) {
   .app-sidebar {
-    flex-basis: 72px;
-    padding: 18px 10px 14px;
+    flex-basis: 68px;
+    padding: 18px 8px 14px;
   }
 
   .sidebar-brand {
     justify-content: center;
-    padding: 2px 0 20px;
+    padding: 2px 0 18px;
   }
 
   .brand-name,
@@ -319,31 +302,24 @@ onMounted(loadWorkspace)
     padding: 0;
   }
 
-  .workspace-header {
-    padding: 0 20px;
+  /* 窄侧栏放不下会话历史，对话页会把它改放到自己页面顶部 */
+  .app-layout.is-chat .sidebar-extension {
+    display: none;
+  }
+
+  .app-layout.is-chat .sidebar-navigation {
+    margin-top: 6px;
+    padding-top: 8px;
   }
 
   .workspace-content {
-    padding: 18px;
+    padding: 20px 18px 18px;
   }
 }
 
 @media (max-width: 600px) {
-  .workspace-header {
-    padding: 0 14px;
-  }
-
-  .breadcrumb-root,
-  .breadcrumb-divider {
-    display: none;
-  }
-
   .workspace-content {
-    padding: 12px;
-  }
-
-  .workspace-content.chat-content {
-    padding: 10px;
+    padding: 16px 12px 12px;
   }
 }
 </style>

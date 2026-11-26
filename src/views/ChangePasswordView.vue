@@ -81,7 +81,7 @@ async function handleSubmit(): Promise<void> {
       <el-form-item label="确认新密码" prop="confirm_password">
         <el-input v-model="passwordForm.confirm_password" type="password" autocomplete="new-password" show-password />
       </el-form-item>
-      <el-button type="primary" native-type="submit" :loading="submitting">确认修改</el-button>
+      <el-button type="primary" class="ink-button" native-type="submit" :loading="submitting">确认修改</el-button>
     </el-form>
   </el-card>
 </template>
@@ -92,8 +92,7 @@ async function handleSubmit(): Promise<void> {
   margin: 0 auto;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  --el-card-padding: 30px 32px;
+  --el-card-padding: 32px 34px;
 }
 
 .form-eyebrow {
@@ -101,7 +100,7 @@ async function handleSubmit(): Promise<void> {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 2px;
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 .password-card h1 {

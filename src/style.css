@@ -20,14 +20,25 @@
   --color-primary-light-7: #c3d3f1;
   --color-primary-light-9: #eef2fc;
 
-  /* ---- 中性色：页面底色、卡片、分割线、三级文字 ---- */
-  --color-canvas: #f6f7fb;
-  --color-sidebar: #f7f8fb;
+  /* ---- 中性色：页面底色、卡片、分割线、三级文字 ----
+   * 底色带一点暖：纯灰白会让整页像后台模板，暖白更像"纸"，长回答读起来不刺眼。 */
+  --color-canvas: #faf9f7;
+  --color-sidebar: #f4f3ef;
   --color-surface: #ffffff;
-  --color-line: #e6e9f2;
-  --color-text: #1c2433;
-  --color-text-muted: #6b7688;
-  --color-text-faint: #98a2b3;
+  --color-line: #e7e4dd;
+  --color-text: #1f2937;
+  --color-text-muted: #6b7280;
+  --color-text-faint: #9aa1ad;
+
+  /* ---- 墨色与点缀色：主按钮用墨色，全页只留蓝色给链接和选中态 ----
+   * 以前按钮、气泡、激活菜单全是蓝，整页没有重点；现在"新建""发送"这类最重的动作用墨色，
+   * 引用标记用暖橙，蓝色只负责"可以点过去"的地方。 */
+  --color-ink: #1f2937;
+  --color-ink-hover: #111827;
+  --color-accent: #c96442;
+  --color-accent-soft: #fbeee8;
+  --color-user-bubble: #efece6;
+  --color-user-bubble-text: #2b2a26;
 
   /* ---- 状态色：成功、失败、警告 ---- */
   --color-success: #1f9d55;
@@ -35,20 +46,23 @@
   --color-warning: #b7791f;
 
   /* ---- 圆角：卡片大圆角，控件中等圆角，胶囊状（按钮/标签）用 pill ---- */
-  --radius-card: 18px;
-  --radius-control: 12px;
+  --radius-card: 16px;
+  --radius-control: 10px;
   --radius-pill: 999px;
+
+  /* ---- 阅读宽度：对话正文一行约 40 个汉字最舒服，超过会串行 ---- */
+  --reading-width: 768px;
 
   /* ---- 动效：统一用这一个时长，避免各处 0.1s/0.2s 混用导致快慢不一 ---- */
   --transition-base: 0.18s ease;
   --transition-fast: 0.12s ease;
 
   /* ---- 中性悬停底色：白底卡片上想加一层灰时用它，替代各处手写 rgba ---- */
-  --color-hover: rgba(20, 35, 61, 0.05);
+  --color-hover: rgba(31, 41, 55, 0.05);
 
   /* ---- 阴影：卡片用轻的，悬浮层（输入框、弹层）用重的 ---- */
-  --shadow-card: 0 1px 2px rgba(20, 35, 61, 0.04), 0 8px 24px rgba(20, 35, 61, 0.06);
-  --shadow-float: 0 12px 32px rgba(20, 35, 61, 0.12);
+  --shadow-card: 0 1px 2px rgba(31, 41, 55, 0.04), 0 8px 24px rgba(31, 41, 55, 0.05);
+  --shadow-float: 0 12px 32px rgba(31, 41, 55, 0.12);
 
   /* ---- Element Plus 主色跟随品牌色 ----
    * 按钮、分页、开关、输入框聚焦边框都读这几个变量，一起覆盖才能整体统一。
@@ -70,12 +84,190 @@
 
 body {
   margin: 0;
-  font-family: system-ui, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-family: system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 14px;
+  line-height: 1.6;
   color: var(--color-text);
   background: var(--color-canvas);
   /* 抗锯齿：让小字号文字在 Windows 上边缘更柔和 */
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * 墨色实心按钮：只有"新建对话""发送"这类每屏最多一个的动作用它。
+ * 为什么不直接改主色：主色还管着链接和选中态，改成墨色后链接会看不出能点。
+ */
+.ink-button {
+  --el-button-bg-color: var(--color-ink);
+  --el-button-border-color: var(--color-ink);
+  --el-button-hover-bg-color: var(--color-ink-hover);
+  --el-button-hover-border-color: var(--color-ink-hover);
+  --el-button-active-bg-color: var(--color-ink);
+  --el-button-active-border-color: var(--color-ink);
+  --el-button-disabled-bg-color: #c7c9ce;
+  --el-button-disabled-border-color: #c7c9ce;
+  font-weight: 500;
+}
+
+/*
+ * 数据表格的统一皮肤：知识库、文档、用户管理三张表共用，各页面只挂类名，不各写一遍。
+ * 为什么放在全局：el-table 渲染出来的行、格、标签不带页面的 scoped 标记，写在页面里要层层 :deep()，
+ * 三张表还会重复三份。
+ *
+ * 分两层：
+ *   .data-panel  表格外面那层带圆角和描边的白色容器（表头行、表格、分页都在里面）
+ *   .data-table  挂在 el-table 上的类，管表头、行、标签、操作按钮的样子
+ */
+.data-panel {
+  padding: 0 20px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  /* 首行、末行的悬停底色不能溢出圆角 */
+  overflow: hidden;
+}
+
+.data-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-expanded-cell-bg-color: transparent;
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--color-text-muted);
+  --el-table-text-color: var(--color-text);
+  --el-table-border-color: var(--color-line);
+  --el-table-row-hover-bg-color: var(--color-hover);
+  font-size: 14px;
+}
+
+/* 表头：一行小字说明，不加底色，靠下面一条略深的线与数据分开 */
+.data-table th.el-table__cell {
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.data-table thead th.el-table__cell {
+  height: 44px;
+  border-bottom-color: #d9d5cc;
+}
+
+/* 行：留足高度，行间只用一条细线 */
+.data-table td.el-table__cell {
+  padding: 13px 0;
+}
+
+.data-table .cell {
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 表格自带的底部横线去掉，最后一行不留线，分隔交给下面的分页条 */
+.data-table .el-table__inner-wrapper::before,
+.data-table .el-table__row:last-child td.el-table__cell {
+  border-bottom: 0;
+}
+
+/* 列的层级：名称列加粗用墨色，编号这类次要列用浅色，一眼先看到"是谁" */
+.data-table td.is-primary .cell {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.data-table td.is-faint .cell {
+  color: var(--color-text-faint);
+}
+
+.data-table .el-table__empty-text {
+  padding: 40px 0;
+  color: var(--color-text-faint);
+}
+
+/* 标签：去掉描边，统一成小圆角浅底胶囊；状态用绿/琥珀/红，角色用中性深字 */
+.data-table .el-tag {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.data-table .el-tag--primary {
+  --el-tag-bg-color: var(--color-user-bubble);
+  --el-tag-text-color: var(--color-text);
+}
+
+.data-table .el-tag--success {
+  --el-tag-bg-color: #e7f3eb;
+  --el-tag-text-color: #237a4b;
+}
+
+.data-table .el-tag--info {
+  --el-tag-bg-color: var(--color-user-bubble);
+  --el-tag-text-color: var(--color-text-muted);
+}
+
+.data-table .el-tag--warning {
+  --el-tag-bg-color: #fbf1dc;
+  --el-tag-text-color: var(--color-warning);
+}
+
+.data-table .el-tag--danger {
+  --el-tag-bg-color: #fbe9e7;
+  --el-tag-text-color: var(--color-danger);
+}
+
+/*
+ * 操作列：不再用蓝、绿、红三种亮色文字挤在一起。
+ * 普通操作是灰色文字、悬停变墨色；删除/停用这类危险操作平时更淡，悬停才变红。
+ */
+.data-table .el-button.is-link {
+  padding: 0 2px;
+  font-weight: 500;
+  --el-button-text-color: var(--color-text-muted);
+  --el-button-hover-link-text-color: var(--color-text);
+}
+
+.data-table .el-button.is-link.el-button--danger {
+  --el-button-text-color: var(--color-text-faint);
+  --el-button-hover-link-text-color: var(--color-danger);
+}
+
+/* 对本人不可操作的按钮（比如不能改自己的角色）保留但变淡，位置不跳动 */
+.data-table .el-button.is-link.is-disabled {
+  opacity: 0.45;
+  --el-button-disabled-text-color: var(--color-text-muted);
+}
+
+/* 分页条：贴在表格下方，上面一条线隔开；当前页是墨色圆角块 */
+.data-panel .el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-bg-color: transparent;
+  --el-pagination-button-color: var(--color-text-muted);
+  --el-pagination-hover-color: var(--color-text);
+  margin-top: 0;
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--color-line);
+  font-weight: 400;
+}
+
+.data-panel .el-pagination .el-pager li {
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-panel .el-pagination .el-pager li.is-active {
+  background: var(--color-ink);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.data-total {
+  margin-right: 4px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 细滚动条：默认滚动条太粗太显眼，收成 6px 并淡化颜色 */
@@ -103,7 +295,7 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #4c8bff 0%, #1f4fc4 100%);
+  background: var(--color-ink);
   color: #ffffff;
   font-size: 18px;
   font-weight: 700;

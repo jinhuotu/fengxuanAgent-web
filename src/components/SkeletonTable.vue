@@ -45,18 +45,15 @@ function columnNumbers(): number[] {
 </template>
 
 <style scoped>
+/* 骨架屏放在 .data-panel 里，容器已经带了描边和圆角，这里不再自己画框 */
 .skeleton-table {
-  margin-top: 20px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-control);
   overflow: hidden;
 }
 
 .skeleton-row {
   display: flex;
   gap: 16px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--color-line);
+  padding: 13px 0;
 }
 
 .skeleton-row:first-child {
@@ -64,7 +61,13 @@ function columnNumbers(): number[] {
 }
 
 .skeleton-head {
-  background: var(--color-canvas);
+  align-items: center;
+  height: 44px;
+  border-bottom: 1px solid #d9d5cc;
+}
+
+.skeleton-row:not(.skeleton-head) + .skeleton-row {
+  border-top: 1px solid var(--color-line);
 }
 
 /* 第一列宽一点，模仿"编号/名称在前"的常见表格 */

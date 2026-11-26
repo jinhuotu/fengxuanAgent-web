@@ -312,14 +312,14 @@ watch(knowledgeBaseId, openKnowledgeBase, { immediate: true })
         <el-button :disabled="!knowledgeBase || loading || uploading || fileUploading" @click="uploadVisible = true">
           + 上传文档
         </el-button>
-        <el-button type="primary" :loading="fileUploading" :disabled="!knowledgeBase || loading || uploading"
+        <el-button type="primary" class="ink-button" :loading="fileUploading" :disabled="!knowledgeBase || loading || uploading"
           @click="fileInput?.click()">
           {{ fileUploading ? '正在上传并解析…' : '上传文件' }}
         </el-button>
       </div>
     </template>
-    <el-table :data="documentRows" row-key="id" empty-text="这个知识库还没有文档，先上传一篇">
-      <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
+    <el-table :data="documentRows" row-key="id" class="data-table" empty-text="这个知识库还没有文档，先上传一篇">
+      <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip class-name="is-primary" />
       <el-table-column label="字数" width="100">
         <template #default="{ row }">{{ row.char_count }} 字</template>
       </el-table-column>
@@ -330,7 +330,7 @@ watch(knowledgeBaseId, openKnowledgeBase, { immediate: true })
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="170">
+      <el-table-column label="创建时间" width="170" class-name="is-faint">
         <template #default="{ row }">{{ formatKnowledgeTime(row.created_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="155">
@@ -359,7 +359,7 @@ watch(knowledgeBaseId, openKnowledgeBase, { immediate: true })
           :maxlength="MAX_CONTENT_LENGTH" :count-graphemes="countKnowledgeCharacters" show-word-limit />
       </el-form-item>
       <p v-if="uploadError" class="upload-error" role="alert">{{ uploadError }}</p>
-      <el-button native-type="submit" type="primary" :loading="uploading">确认上传</el-button>
+      <el-button native-type="submit" type="primary" class="ink-button" :loading="uploading">确认上传</el-button>
       <el-button :disabled="uploading" @click="uploadVisible = false">取消</el-button>
     </el-form>
   </el-dialog>
@@ -368,9 +368,13 @@ watch(knowledgeBaseId, openKnowledgeBase, { immediate: true })
 <style scoped>
 .back-to-knowledge {
   display: inline-block;
-  margin-bottom: 8px;
-  color: var(--color-primary);
+  margin-bottom: 10px;
+  color: var(--color-text-muted);
   font-size: 13px;
+}
+
+.back-to-knowledge:hover {
+  color: var(--color-text);
 }
 
 .upload-error {

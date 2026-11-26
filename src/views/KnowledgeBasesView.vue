@@ -126,18 +126,18 @@ onMounted(loadBases)
     @retry="loadBases()" @page-change="loadBases">
     <template #heading><h1>知识库</h1></template>
     <template #actions>
-      <el-button type="primary" :disabled="loading || creating" @click="createVisible = true">+ 新建知识库</el-button>
+      <el-button type="primary" class="ink-button" :disabled="loading || creating" @click="createVisible = true">+ 新建知识库</el-button>
     </template>
-    <el-table :data="knowledgeBases" row-key="id" class="knowledge-base-table"
+    <el-table :data="knowledgeBases" row-key="id" class="data-table"
       empty-text="还没有知识库，点右上角新建一个" @row-click="openDocuments">
-      <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip class-name="is-primary" />
       <el-table-column label="说明" min-width="200" show-overflow-tooltip>
         <template #default="{ row }">{{ row.description?.trim() || '未填写' }}</template>
       </el-table-column>
       <el-table-column label="文档数" width="100">
         <template #default="{ row }">{{ formatDocumentCount(row.document_count) }}</template>
       </el-table-column>
-      <el-table-column label="创建时间" width="170">
+      <el-table-column label="创建时间" width="170" class-name="is-faint">
         <template #default="{ row }">{{ formatKnowledgeTime(row.created_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="155">
@@ -163,14 +163,15 @@ onMounted(loadBases)
           :count-graphemes="countKnowledgeCharacters" />
       </el-form-item>
       <p v-if="createError" class="form-error" role="alert">{{ createError }}</p>
-      <el-button native-type="submit" type="primary" :loading="creating">确认创建</el-button>
+      <el-button native-type="submit" type="primary" class="ink-button" :loading="creating">确认创建</el-button>
       <el-button :disabled="creating" @click="createVisible = false">取消</el-button>
     </el-form>
   </el-dialog>
 </template>
 
 <style scoped>
-.knowledge-base-table :deep(.el-table__body tr) {
+/* 整行都能点进文档页，鼠标移上去用手形提示 */
+.data-table :deep(.el-table__body tr) {
   cursor: pointer;
 }
 

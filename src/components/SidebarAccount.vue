@@ -46,8 +46,8 @@ const emit = defineEmits<{ logout: [] }>()
   height: 32px;
   flex-shrink: 0;
   border-radius: 10px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-user-bubble);
+  color: var(--color-text);
   font-weight: 600;
 }
 

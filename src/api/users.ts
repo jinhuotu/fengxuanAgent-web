@@ -1,7 +1,7 @@
 /** 用户管理请求，只负责传递参数和拆出强类型结果。 */
 import http from '@/api/http'
 import type {
-  ApiResponse, RoleBindData, RoleBindRequest, RoleListData, RoleUnbindData, UserCreateRequest,
+  ApiResponse, RoleBindData, RoleBindRequest, RoleListData, RoleUnbindData, UserCreateRequest, UserDeleteData,
   UserInfo, UserListData, UserListQuery, UserStatusChangeData, UserStatusChangeRequest,
 } from '@/types/api'
 
@@ -59,5 +59,14 @@ export async function changeUserStatus(
 ): Promise<UserStatusChangeData> {
   const statusPath = `${USERS_PATH}/${userId}${USER_STATUS_PATH}`
   const response = await http.patch<ApiResponse<UserStatusChangeData>>(statusPath, payload)
+  return response.data.data
+}
+
+// 做什么：逻辑删除指定用户，后端只打删除标记，不删除数据库里的记录
+// 入参：目标用户编号
+// 返回：被删除的用户编号；无权限、目标不存在或请求失败时由拦截器提示并抛出异常
+export async function deleteUser(userId: number): Promise<UserDeleteData> {
+  const userPath = `${USERS_PATH}/${userId}`
+  const response = await http.delete<ApiResponse<UserDeleteData>>(userPath)
   return response.data.data
 }

@@ -116,3 +116,8 @@ export interface UserStatusChangeData {
   changed: boolean
   status: string
 }
+
+/** 逻辑删除用户的返回：被删除的用户编号 */
+export interface UserDeleteData {
+  deleted_user_id: number
+}
