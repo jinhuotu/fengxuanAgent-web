@@ -1,0 +1,33 @@
+#!/bin/sh
+# 提交前自动检查：跑三组前端测试；改了源码或构建配置时再做一次构建（含类型检查）。
+# 启用（每个克隆执行一次）：git config core.hooksPath .githooks
+# 确实要先存一版时临时跳过：git commit --no-verify
+
+# 注意：检查的是工作区当前的文件，不是暂存区里的版本。
+# 工作区里还有没打算一起提交的改动时，它们也会被一起检查。
+STAGED=$(git diff --cached --name-only --diff-filter=ACMRD | grep -E '^(src|tests)/|^package\.json$|^index\.html$|^vite\.config\.|^tsconfig')
+if [ -z "$STAGED" ]; then
+  echo "提交前检查：本次没有改前端代码，跳过测试"
+  exit 0
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "找不到 npm，无法在提交前运行测试。请修好环境，或用 git commit --no-verify 跳过"
+  exit 1
+fi
+
+echo "提交前检查：运行前端测试（三组）..."
+npm run -s test:chat && npm run -s test:layout && npm run -s test:knowledge || {
+  echo ""
+  echo "前端测试未通过，提交已被拦下。修好后再提交；确实要先存一版用：git commit --no-verify"
+  exit 1
+}
+
+# 只改测试文件时不必构建；动了 src 或构建配置才做类型检查和打包（约 30 秒）
+if echo "$STAGED" | grep -Eq '^src/|^package\.json$|^index\.html$|^vite\.config\.|^tsconfig'; then
+  echo "提交前检查：源码或构建配置有改动，运行构建与类型检查（约 30 秒）..."
+  npm run -s build || {
+    echo ""
+    echo "构建或类型检查未通过，提交已被拦下。修好后再提交；确实要先存一版用：git commit --no-verify"
+    exit 1
+  }
+fi

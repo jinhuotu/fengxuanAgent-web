@@ -28,6 +28,12 @@ npm run test:chat
 # 统一侧栏布局、菜单权限和子路由登录守卫
 npm run test:layout
 
+# 知识库页面的列表、状态文案、Markdown 渲染等逻辑，不访问真实接口
+npm run test:knowledge
+
+# 启用提交前自动检查（每个克隆执行一次，钩子脚本在 .githooks/ 里，随仓库提交）
+git config core.hooksPath .githooks
+
 # 独立只读视觉预览，5179 端口，不连接真实后端或读取项目环境文件
 npm run preview:layout
 
@@ -72,3 +78,24 @@ netstat -ano | Select-String ":5178"
 | `127.0.0.1:5178` 打不开但 `localhost:5178` 能开 | Vite 默认绑 localhost（可能 IPv6） | `server.host` 写 `127.0.0.1` |
 | 端口被占用报错 | 上次的 dev server 没关 | 关掉旧终端，或 `Get-Process node \| Stop-Process` |
 | 登录点提交提示 404 | 后端还没实现 `POST /auth/login` | 等后端第 10 步完成 |
+
+## 六、提交前自动检查
+
+钩子脚本放在仓库的 `.githooks/` 目录里，随代码一起提交；Git 默认不会去那里找，所以**每个克隆要启用一次**：
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+启用后每次 `git commit` 的行为：
+
+| 本次提交暂存了什么 | 钩子做什么 | 大约耗时 |
+|---|---|---|
+| 只有文档这类文件 | 不跑测试，直接放行 | 即时 |
+| `tests/` 下的测试文件 | 跑三组测试（`test:chat`、`test:layout`、`test:knowledge`） | 十几秒 |
+| `src/`、`package.json`、`vite.config.*`、`tsconfig*`、`index.html` | 三组测试 + `npm run build`（类型检查和打包） | 约 45 秒 |
+
+确实要先存一版时临时跳过：`git commit --no-verify`。跳过的提交等于没有测试保护，之后要补跑。
+
+两点说明：钩子检查的是工作区当前的文件，暂存区之外还没打算提交的改动也会被一起检查；
+钩子用 PATH 里的 `npm`，终端里找不到 npm 时它会直接说明并拦下提交。
