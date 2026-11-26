@@ -135,11 +135,11 @@ async function openRoleDialog(user: UserListItem, action: RoleAction): Promise<v
   roleDialog.visible = true
   if (action === 'unbind') return
 
-  const requestToken = authStore.token
+  const requestAccountKey = authStore.accountKey
   roleDialog.loading = true
   try {
     const roles = await getRoles()
-    if (requestToken === authStore.token && roleDialog.visible) roleDialog.options = roles.items
+    if (requestAccountKey === authStore.accountKey && roleDialog.visible) roleDialog.options = roles.items
   } catch {
     // 加载失败由请求拦截器提示，用户可关闭后重试。
   } finally {
@@ -168,13 +168,13 @@ async function confirmUserAction(message: string, title: string, confirmText: st
 async function submitRoleChange(): Promise<void> {
   const { user, roleCode, action } = roleDialog
   if (!user || !roleCode || !canBindRoles.value || !canEditUser(user.id) || roleDialog.saving) return
-  const requestToken = authStore.token
+  const requestAccountKey = authStore.accountKey
   roleDialog.saving = true
   try {
     if (action === 'unbind' && roleCode === ADMIN_ROLE_CODE && !await confirmUserAction(
       `确认撤销「${user.username}」的管理员角色？`, '撤销管理员角色', '确认撤销',
     )) return
-    if (requestToken !== authStore.token || !canBindRoles.value || !canEditUser(user.id)) return
+    if (requestAccountKey !== authStore.accountKey || !canBindRoles.value || !canEditUser(user.id)) return
     if (action === 'bind') {
       const result = await bindUserRole(user.id, { role_code: roleCode })
       ElMessage.success(result.created ? '角色追加成功' : '该角色已绑定，无需重复追加')
@@ -196,14 +196,14 @@ async function submitRoleChange(): Promise<void> {
 // 返回：成功时刷新列表；取消或失败时保留当前显示
 async function submitUserStatus(user: UserListItem): Promise<void> {
   if (!canChangeStatus.value || !canEditUser(user.id) || statusChangeUserId.value !== null) return
-  const requestToken = authStore.token
+  const requestAccountKey = authStore.accountKey
   const status = user.status === USER_STATUS_ACTIVE ? USER_STATUS_DISABLED : USER_STATUS_ACTIVE
   statusChangeUserId.value = user.id
   try {
     if (status === USER_STATUS_DISABLED && !await confirmUserAction(
       `停用「${user.username}」会使其当前登录失效，是否继续？`, '停用账号', '确认停用',
     )) return
-    if (requestToken !== authStore.token || !canChangeStatus.value || !canEditUser(user.id)) return
+    if (requestAccountKey !== authStore.accountKey || !canChangeStatus.value || !canEditUser(user.id)) return
     const result = await changeUserStatus(user.id, { status })
     const message = result.status === USER_STATUS_ACTIVE ? '账号已启用' : '账号已停用'
     ElMessage.success(result.changed ? message : '账号状态未变化')
@@ -220,13 +220,13 @@ async function submitUserStatus(user: UserListItem): Promise<void> {
 // 返回：成功后刷新列表；取消或失败时保留当前显示
 async function submitUserDelete(user: UserListItem): Promise<void> {
   if (!canDeleteUsers.value || !canEditUser(user.id) || deletingUserId.value !== null) return
-  const requestToken = authStore.token
+  const requestAccountKey = authStore.accountKey
   deletingUserId.value = user.id
   try {
     const confirmed = await confirmUserAction(
       `删除后「${user.username}」会立即退出登录并从列表移除，账号无法恢复。是否继续？`, '删除账号', '确认删除',
     )
-    if (!confirmed || requestToken !== authStore.token || !canDeleteUsers.value || !canEditUser(user.id)) return
+    if (!confirmed || requestAccountKey !== authStore.accountKey || !canDeleteUsers.value || !canEditUser(user.id)) return
     await deleteUser(user.id)
     ElMessage.success(`账号「${user.username}」已删除`)
     // 新手注意：删掉一页里的最后一条后，这一页就像空了的抽屉，要退回上一页才看得到东西。

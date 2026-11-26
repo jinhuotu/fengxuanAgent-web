@@ -27,7 +27,7 @@ const authStore = useAuthStore()
 const initialSessionId = Number(route.query.session) || 0
 const chat = useChat(initialSessionId)
 const { state } = chat
-const { referencePreview, openReference } = useChatReferenceDrawer(() => state.selectedId, () => authStore.token)
+const { referencePreview, openReference } = useChatReferenceDrawer(() => state.selectedId, () => authStore.accountKey)
 const generatingSessionIds = computed(listGeneratingSessionIds)
 const retryCandidate = computed(() => latestRetryRequestId(state.current))
 const conversationBusy = computed(() => state.current.sending || state.current.confirming || state.current.pendingRequestId !== null)
@@ -329,9 +329,9 @@ function handleAccountChanged(changed: boolean): void {
 
 // 做什么：只用服务器确认过的用户编号启用账号通知
 // 入参：已加载的本人编号，尚未加载时为 undefined
-// 返回：无；暂未确认身份时仍监听登录变化和可见校准
+// 返回：无；暂未确认身份时仍监听登录变化和可见校准。比较的是账号标识，续期换了凭证不算换号
 function startTabIdentity(userId: number | undefined): void {
-  if (authStore.token !== state.accountToken) return
+  if (authStore.accountKey !== state.accountToken) return
   chat.startTabSync(userId ?? null)
 }
 
@@ -397,7 +397,7 @@ async function changeKnowledgeBase(knowledgeBaseId: number | null): Promise<void
 // 返回：无
 function mountChat(): void {
   // 从其他业务页进入时，内存身份可能仍属于其他标签页切换前的账号。
-  if (authStore.token !== state.accountToken) {
+  if (authStore.accountKey !== state.accountToken) {
     handleAccountChanged(true)
     return
   }

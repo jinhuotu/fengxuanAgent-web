@@ -57,8 +57,12 @@ fengxuanAgent-web/                ✔ 已建 / □ 未建
 ```
 
 - `code === 0` 成功；非 0 时 `message` 直接展示给用户，`data` 为 null。
-- 登录返回 `data`：`{ "access_token": "...", "token_type": "bearer", "expires_in": 1800 }`
+- 登录和续期返回 `data`：`{ "access_token": "...", "token_type": "bearer", "expires_in": 3600 }`
 - 带 token 的请求统一用 `Authorization: Bearer <token>`，由 `http.ts` 请求拦截器自动加。
+
+登录时长（数字都写成常量，在 `utils/sessionPolicy.ts`）：凭证有效期由后端决定，默认 60 分钟且不随操作延长；前端在凭证签发满 30 分钟时调用 `POST /auth/refresh` 换新凭证；连续 120 分钟没有任何操作时自动退出（先调退出接口作废凭证，再清本地状态回登录页）。计时挂在 `layouts/AppLayout.vue`，由 `composables/useSessionWatch.ts` 实现：每 60 秒检查一次，鼠标、键盘、滚轮、触摸以及页面重新可见都算操作。
+
+"是不是换了账号"按凭证里的 `sub:ver` 判断（`utils/token.ts` 的 `readAccountKey`，解不开的字符串原样返回），不按凭证字符串判断，所以续期不会清空对话、不会打断生成、不会整页刷新。身份仓库的 `replaceToken` 只换凭证不重置身份和权限；`syncStoredToken` 只有在账号标识变了的时候才清空身份。签发时间由本机记在 `localStorage` 的 `fengxuan_token_issued_at`（不解析凭证，避免本机和服务器时钟不一致）；上次操作时间记在 `fengxuan_last_activity`，各标签页取内存和共享存储里较新的那个，后台标签页不会因为别的标签页一直在用而被误判为闲置。
 
 ## 四、端口与跨域
 
@@ -73,7 +77,7 @@ fengxuanAgent-web/                ✔ 已建 / □ 未建
 `api/chat.ts` 封装分页请求、带认证的流式 POST 和 keepalive 中断；`utils/chatStream.ts` 统一解析 SSE。
 `types/chat.ts` 定义与后端一致的会话、消息和事件结构，不把聊天内容写入浏览器持久存储。
 `chatTabSync.ts` 托管同源 BroadcastChannel、可见/焦点/存储事件与单飞轮询；`chatRemote.ts` 查询本人状态和快照，不接管停止权限；`utils/tabChannel.ts` 仅封装可选通道，无业务或鉴权。
-ChatView 展示远端观察及同步入口；auth.syncStoredToken 采用其他页面的存储并清空身份/权限，不写回 token。登录变化撤销旧页面并重新验证，通知只传标识，所有内容仍从本人接口读取。
+ChatView 展示远端观察及同步入口；auth.syncStoredToken 采用其他页面的存储，账号变了才清空身份/权限（同账号续期只换凭证），不写回 token。登录变化撤销旧页面并重新验证，通知只传标识，所有内容仍从本人接口读取。
 切换或新建会话不中断旧生成；消息、草稿、错误和活动请求按会话隔离，state.current 指向当前展示会话。停止按钮只停止当前会话，离开、刷新或关闭对话页取消本页面全部任务；历史由后端 MySQL 恢复。
 components/ChatSessionList.vue 纯展示列表和本页面正在生成的会话，发出选择、新建、分页、删除和清空事件，不发请求、不修改共享状态。每行是 `li`，内含"选中"和"删除"两个独立按钮（button 不能嵌套 button）；删除图标平时隐藏，悬停或键盘聚焦时出现，生成中置灰。
 composables/chatRecovery.ts 管理有限结果确认和重试资格查询；未知结果期间禁止该会话重新发送，其他会话不受影响。最近失败或中断回答的按钮仅发事件，由 useChat 使用新 UUID 和 retry_of_request_id 提交。

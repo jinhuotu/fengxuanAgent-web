@@ -8,7 +8,7 @@ import { defineStore } from 'pinia'
 import { getCurrentPermissions, getCurrentUser } from '@/api/auth'
 import type { UserInfo } from '@/types/api'
 
-import { clearToken, getToken, saveToken } from '@/utils/token'
+import { clearToken, getToken, readAccountKey, saveToken } from '@/utils/token'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -25,26 +25,40 @@ export const useAuthStore = defineStore('auth', {
     // 入参：无
     // 返回：true 表示有 token（注意：这只说明"本地有票"，票是否有效要后端说了算）
     isLoggedIn: (state): boolean => state.token.length > 0,
+    // 做什么：得到"当前是哪个账号的哪一批登录"
+    // 入参：无
+    // 返回：账号标识；续期会换凭证但标识不变，退出或改密后标识才会变
+    accountKey: (state): string => readAccountKey(state.token),
   },
 
   actions: {
-    // 做什么：采用其他页面已写入的登录状态，同时撤销旧身份和权限
+    // 做什么：采用其他页面已写入的登录状态；同账号续期时保留身份，换了账号才撤销
     // 入参：无，只读取当前存储
     // 返回：无；不删除或覆盖其他页面的新 token
+    // 新手注意：续期像换了张同一个人的新门禁卡，人没变，不用把桌子上的东西收走。
     syncStoredToken(): void {
+      const previousKey = this.accountKey
+      this.token = getToken()
+      if (this.token && this.accountKey === previousKey) return
       this.currentUser = null
       this.permissionVersion++
       this.permissions = []
       this.permissionsLoaded = false
-      this.token = getToken()
+    },
+    // 做什么：续期后换上新凭证，本人信息和权限保持不动
+    // 入参：后端新签发的凭证
+    // 返回：无；调用方需先确认新旧凭证属于同一账号
+    replaceToken(token: string): void {
+      this.token = token
+      saveToken(token)
     },
     // 做什么：加载供统一布局和各页面共享的本人信息
     // 入参：无，使用当前登录凭证
     // 返回：成功保存本人信息；失败抛异常，账号切换后的旧结果被忽略
     async loadCurrentUser(): Promise<void> {
-      const requestToken = this.token
+      const requestKey = this.accountKey
       const currentUser = await getCurrentUser()
-      if (requestToken === this.token) this.currentUser = currentUser
+      if (requestKey === this.accountKey) this.currentUser = currentUser
     },
 
     // 做什么：加载本人权限，清除旧权限并忽略过期请求

@@ -3,7 +3,7 @@ import type { AxiosError } from 'axios'
 import { reactive } from 'vue'
 import { ChatRequestError, clearChatSessions, createChatSession, deleteChatSession, getChatSessions, interruptChat, streamChat } from '@/api/chat'
 import type { ChatEvent, ChatMessage, ChatReference, ChatSession } from '@/types/chat'
-import { getToken } from '@/utils/token'
+import { readAccountKey } from '@/utils/token'
 import { confirmRequest, createRecoveryState, latestRetryRequestId, submissionWasRejected, validateManualRetry } from '@/composables/chatRecovery'
 import { discardRejectedTurn, invalidateHistorySync, refreshConversationHistory } from '@/composables/chatHistory'
 import { connectChatTabs } from '@/composables/chatTabSync'
@@ -46,7 +46,8 @@ function createChatState() {
     sessions: [] as ChatSession[], selectedId: 0,
     conversations: {} as Record<number, ConversationState>, current: createConversation(0),
     sessionPage: FIRST_PAGE, sessionTotal: 0, loading: false, creating: false,
-    disposed: false, accountToken: getToken(), unauthorized: false, accountChanged: false,
+    // accountToken 记的是"哪个账号的哪一批登录"，续期换了凭证字符串它也不变
+    disposed: false, accountToken: readAccountKey(), unauthorized: false, accountChanged: false,
     tabSync: null as ChatTabSync | null,
   })
 }
@@ -55,9 +56,9 @@ export type ChatState = ReturnType<typeof createChatState>
 
 // 做什么：确认异步响应仍属于当前页面和账号
 // 入参：页面状态
-// 返回：页面未销毁且账号未变化时返回 true
+// 返回：页面未销毁且账号未变化时返回 true；同一账号续期凭证不算变化
 function pageIsCurrent(state: ChatState): boolean {
-  return !state.disposed && state.accountToken === getToken()
+  return !state.disposed && state.accountToken === readAccountKey()
 }
 
 // 做什么：展示请求错误并区分登录失效，后台错误只写回所属会话
@@ -119,7 +120,7 @@ function findAssistant(conversation: ConversationState, requestId: string): Chat
 // 入参：页面状态和所属会话，默认当前会话
 // 返回：无；通知失败保留提示，断线清理和到期恢复兜底
 async function stopGeneration(state: ChatState, conversation = state.current): Promise<void> {
-  if (state.accountToken !== getToken()) {
+  if (state.accountToken !== readAccountKey()) {
     conversation.active?.controller.abort()
     return
   }

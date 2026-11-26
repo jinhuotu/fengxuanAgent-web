@@ -1,5 +1,5 @@
 /** 同源页面只广播变更提示，实际状态始终读取本人接口。 */
-import { getToken, TOKEN_KEY } from '@/utils/token'
+import { readAccountKey, TOKEN_KEY } from '@/utils/token'
 import { openTabChannel } from '@/utils/tabChannel'
 import type { TabChannel } from '@/utils/tabChannel'
 import type { ChatState, ConversationState } from '@/composables/useChat'
@@ -118,10 +118,10 @@ class TabSyncController {
 
   // 做什么：检查本页身份是否仍有效，变化立即关闭同步和旧页面
   // 入参：无
-  // 返回：仍属原登录快照时为 true，否则 false
+  // 返回：仍属原登录快照时为 true，否则 false；同账号续期凭证不算变化
   private isCurrent(): boolean {
     if (this.closed || this.state.disposed) return false
-    if (getToken() === this.state.accountToken) return true
+    if (readAccountKey() === this.state.accountToken) return true
     this.close()
     clearChangedAccount(this.state)
     return false
@@ -284,7 +284,7 @@ export function createChatTabSync(state: ChatState, userId: number | null,
 // 入参：页面状态、列表刷新回调和已验证用户编号
 // 返回：无；无浏览器时保持关闭，旧账号不重新启动
 export function connectChatTabs(state: ChatState, refreshSessions: () => Promise<void>, userId: number | null = null): void {
-  if (state.disposed || state.accountToken !== getToken()) return
+  if (state.disposed || state.accountToken !== readAccountKey()) return
   if (state.tabSync && (userId === null || state.tabSync.userId === userId)) return
   state.tabSync?.close()
   state.tabSync = createChatTabSync(state, userId, refreshSessions)

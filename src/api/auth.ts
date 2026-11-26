@@ -10,6 +10,7 @@ import type { ApiResponse, ChangePasswordRequest, CurrentPermissions, LoginData,
 const CHANGE_PASSWORD_PATH = '/auth/change-password'
 const CURRENT_PERMISSIONS_PATH = '/auth/me/permissions'
 const LOGOUT_PATH = '/auth/logout'
+const REFRESH_PATH = '/auth/refresh'
 
 // 做什么：查询当前登录用户的权限码清单
 // 入参：无，凭证由统一请求实例携带
@@ -43,10 +44,26 @@ export async function changePassword(payload: ChangePasswordRequest): Promise<nu
   return response.data.data
 }
 
+// 做什么：用仍然有效的当前凭证换一张新凭证，有效期从现在重新计算
+// 入参：无，当前凭证由请求拦截器携带
+// 返回：新凭证与有效期；失败时不弹提示并抛出异常，是否结束会话由会话计时决定
+export async function refreshLogin(): Promise<LoginData> {
+  const response = await http.post<ApiResponse<LoginData>>(REFRESH_PATH, undefined, { suppressErrorMessage: true })
+  return response.data.data
+}
+
 // 做什么：通知后端撤销当前账号的登录凭证
 // 入参：无，当前 token 由请求拦截器携带
 // 返回：成功得到 null；失败也要让调用方继续清本地登录状态
 export async function logout(): Promise<null> {
   const response = await http.post<ApiResponse<null>>(LOGOUT_PATH)
+  return response.data.data
+}
+
+// 做什么：通知后端撤销当前账号的登录凭证，失败时不弹提示
+// 入参：无，当前凭证由请求拦截器携带；用于会话已到期的自动退出
+// 返回：成功得到 null；失败抛出异常，由调用方继续清理本地状态
+export async function logoutQuietly(): Promise<null> {
+  const response = await http.post<ApiResponse<null>>(LOGOUT_PATH, undefined, { suppressErrorMessage: true })
   return response.data.data
 }

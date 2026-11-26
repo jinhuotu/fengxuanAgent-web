@@ -35,7 +35,9 @@ function createWorkspace(permissions, loggedIn = true) {
     { id: 'sidebar-account-test', inlineTemplate: true, templateOptions: { ssr: true } })
   const shared = { vue, 'vue-router': { ...vueRouter, createWebHistory: vueRouter.createMemoryHistory },
     'vue/server-renderer': serverRenderer, '@/stores/auth': { useAuthStore: () => auth },
-    '@/api/auth': { logout: async () => null } }
+    '@/api/auth': { logout: async () => null },
+    // 会话计时依赖真实时钟和浏览器存储，渲染布局时只确认它被启动和收尾
+    '@/composables/useSessionWatch': { startSessionWatch: () => ({ check: async () => undefined, stop: () => undefined }) } }
   shared['@/components/SidebarAccount.vue'] = evaluateModule(sidebarAccount.content, (name) => shared[name])
   const layout = evaluateModule(script.content, (name) => shared[name]).default
   const router = evaluateModule(routerSource, (name) => {

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises'
 import { reactive } from 'vue'
 import ts from 'typescript'
 
+import { createMemoryStorage, loadTokenModule } from './token-module.mjs'
+
 const source = await readFile(new URL('../src/composables/useChat.ts', import.meta.url), 'utf8')
 const recoverySource = await readFile(new URL('../src/composables/chatRecovery.ts', import.meta.url), 'utf8')
 const compiledRecovery = ts.transpileModule(recoverySource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
@@ -19,7 +21,9 @@ for (const path of ['utils/tabChannel', 'composables/chatRemote', 'composables/c
 // 返回：真实 useChat，不复制实现逻辑
 export function loadChat(api, getToken = () => 'owner-token', browser = {}) {
   const exported = {}
-  const modules = { vue: { reactive }, '@/api/chat': api, '@/utils/token': { getToken, TOKEN_KEY: 'fengxuan_token' } }
+  // 凭证工具用真实源码：判断“是不是同一个账号”的逻辑也在里面，不能用占位实现代替
+  const tokenModule = loadTokenModule(createMemoryStorage(), { getToken })
+  const modules = { vue: { reactive }, '@/api/chat': api, '@/utils/token': tokenModule }
   const recoveryExports = {}
   new Function('require', 'exports', 'setTimeout', compiledRecovery)((name) => modules[name], recoveryExports, (callback) => setTimeout(callback, 0))
   modules['@/composables/chatRecovery'] = recoveryExports

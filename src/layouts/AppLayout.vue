@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import type { AxiosError } from 'axios'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout as requestLogout } from '@/api/auth'
 import SidebarAccount from '@/components/SidebarAccount.vue'
+import { startSessionWatch } from '@/composables/useSessionWatch'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+// 登录后的每个页面都挂在这层外壳里，会话计时在这里启动一次就覆盖全部页面
+const sessionWatch = startSessionWatch()
 const loading = ref(!authStore.currentUser)
 const loadError = ref('')
 const loggingOut = ref(false)
@@ -87,6 +90,8 @@ async function logout(): Promise<void> {
 }
 
 onMounted(loadWorkspace)
+// 外壳卸载等于离开登录后的页面，计时器和监听一起收掉
+onUnmounted(() => sessionWatch.stop())
 </script>
 
 <template>
