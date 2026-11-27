@@ -21,6 +21,14 @@ const QUICK_ENTRIES = [
     accent: 'blue',
   },
   {
+    title: '工作进度',
+    description: '每天记一笔，目标、任务与复习都在这。',
+    path: '/plan',
+    permission: '',
+    icon: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
+    accent: 'blue',
+  },
+  {
     title: '用户管理',
     description: '查看成员、创建账号、追加角色。',
     path: '/users',

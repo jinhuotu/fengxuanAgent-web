@@ -317,6 +317,39 @@ body {
 }
 
 /*
+ * 工作进度面板共用：进度条与轻量文字按钮。
+ * 三个面板都要画进度条，放全局避免写三份；各面板的布局仍留在自己的 scoped 样式里。
+ */
+.plan-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-line);
+  overflow: hidden;
+}
+
+.plan-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width var(--transition-base);
+}
+
+.plan-text-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plan-text-button:hover {
+  color: var(--color-accent);
+}
+
+/*
  * 系统开启"减少动效"时关掉所有动画和过渡：
  * 这是可访问性要求，也让老机器上流式输出更稳。
  */

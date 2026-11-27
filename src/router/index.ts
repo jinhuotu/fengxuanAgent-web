@@ -13,6 +13,7 @@ import UserManagementView from '@/views/UserManagementView.vue'
 import ChatView from '@/views/ChatView.vue'
 import KnowledgeBasesView from '@/views/KnowledgeBasesView.vue'
 import KnowledgeDocumentsView from '@/views/KnowledgeDocumentsView.vue'
+import PlanView from '@/views/PlanView.vue'
 import AppLayout from '@/layouts/AppLayout.vue'
 
 const router = createRouter({
@@ -29,6 +30,7 @@ const router = createRouter({
       children: [
         { path: 'home', name: 'home', component: HomeView, meta: { title: '工作台' } },
         { path: 'chat', name: 'chat', component: ChatView, meta: { title: 'AI 对话' } },
+        { path: 'plan', name: 'plan', component: PlanView, meta: { title: '工作进度' } },
         { path: 'knowledge', name: 'knowledge', component: KnowledgeBasesView, meta: { title: '知识库' } },
         { path: 'knowledge/:knowledgeBaseId', name: 'knowledge-documents', component: KnowledgeDocumentsView,
           meta: { title: '知识库文档' } },
