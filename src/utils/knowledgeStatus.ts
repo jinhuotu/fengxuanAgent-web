@@ -57,3 +57,34 @@ export function countKnowledgeCharacters(content: string): number {
   // 新手注意：按完整字符计数，表情不会因占两个 UTF-16 位置而算成两个字。
   return Array.from(content).length
 }
+
+const fileTypeLabels: Partial<Record<number, string>> = {
+  1: '文本', 2: 'PDF', 3: 'Word', 4: 'PPT', 5: 'Excel', 6: '图片', 7: '视频',
+}
+const fileSourceLabels: Partial<Record<number, string>> = { 1: '上传文件', 2: '粘贴文本', 3: '链接抓取' }
+const BYTES_PER_KB = 1024
+const BYTES_PER_MB = 1024 * 1024
+
+// 做什么：把后端的文件类型编号转成可读名称
+// 入参：文件类型编号
+// 返回：文本、PDF 等名称；未知编号显示"未知"
+export function fileTypeLabel(fileType: number): string {
+  return fileTypeLabels[fileType] ?? '未知'
+}
+
+// 做什么：把文档来源编号转成可读名称
+// 入参：来源编号
+// 返回：上传文件、粘贴文本或链接抓取
+export function documentSourceLabel(sourceType: number): string {
+  return fileSourceLabels[sourceType] ?? '未知来源'
+}
+
+// 做什么：把字节数换成便于阅读的大小
+// 入参：原始字节数，粘贴文本时为空
+// 返回：B/KB/MB 文案；空值显示破折号
+export function formatFileSize(size: number | null): string {
+  if (size === null) return '—'
+  if (size < BYTES_PER_KB) return `${size} B`
+  if (size < BYTES_PER_MB) return `${(size / BYTES_PER_KB).toFixed(1)} KB`
+  return `${(size / BYTES_PER_MB).toFixed(1)} MB`
+}

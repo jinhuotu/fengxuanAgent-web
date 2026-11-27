@@ -12,7 +12,21 @@ export interface KnowledgeDocument {
   title: string
   char_count: number
   status: number
+  // 来源：1 上传文件，2 粘贴文本，3 URL 抓取
+  source_type: number
+  // 文件类型：1 文本，2 PDF，3 Word，4 PPT，5 Excel，6 图片，7 视频
+  file_type: number
+  file_name: string | null
+  file_size: number | null
   created_at: string
+}
+
+export interface KnowledgeFileType {
+  kind: number
+  name: string
+  extensions: string[]
+  enabled: boolean
+  note: string | null
 }
 
 export interface KnowledgePage<T> {

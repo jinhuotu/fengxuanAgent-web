@@ -4,7 +4,7 @@ import type { ApiResponse } from '@/types/api'
 import type { ChatSession } from '@/types/chat'
 import type {
   KnowledgeBase, KnowledgeBaseCreate, KnowledgeBaseDeleteResult, KnowledgeChunkDetail, KnowledgeChunkPage,
-  KnowledgeDocument, KnowledgeDocumentCreate, KnowledgeDocumentDeleteResult, KnowledgePage,
+  KnowledgeDocument, KnowledgeDocumentCreate, KnowledgeDocumentDeleteResult, KnowledgeFileType, KnowledgePage,
 } from '@/types/knowledge'
 
 const KNOWLEDGE_BASES_PATH = '/knowledge-bases'
@@ -12,6 +12,7 @@ const KNOWLEDGE_CHUNKS_PATH = '/knowledge-chunks'
 const CHAT_SESSIONS_PATH = '/chat/sessions'
 const DOCUMENTS_PATH = '/documents'
 const FILE_PATH = '/file'
+const FILE_TYPES_PATH = '/file-types'
 const CHUNKS_PATH = '/chunks'
 const MANAGEMENT_REQUEST = { suppressErrorMessage: true, redirectOnUnauthorized: true }
 const FILE_UPLOAD_TIMEOUT_MS = 60000
@@ -25,6 +26,16 @@ export async function listKnowledgeBases(
   const response = await http.get<ApiResponse<KnowledgePage<KnowledgeBase>>>(KNOWLEDGE_BASES_PATH, {
     params: { page, page_size: pageSize }, suppressErrorMessage: true, redirectOnUnauthorized,
   })
+  return response.data.data
+}
+
+// 做什么：读取后端真实支持的文件类型，供上传区渲染类型卡片
+// 入参：无
+// 返回：类型编号、名称、后缀、是否启用与未启用说明
+export async function listKnowledgeFileTypes(): Promise<KnowledgeFileType[]> {
+  const response = await http.get<ApiResponse<KnowledgeFileType[]>>(
+    `${KNOWLEDGE_BASES_PATH}${FILE_TYPES_PATH}`, MANAGEMENT_REQUEST,
+  )
   return response.data.data
 }
 

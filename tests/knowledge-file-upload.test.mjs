@@ -82,7 +82,7 @@ test('rejects unsupported types and oversized files before sending', async (test
   assert.deepEqual(requests, [])
   assert.deepEqual(refreshes, [])
   assert.deepEqual(notices, [
-    ['error', '仅支持 .txt、.md、.docx、.pdf 文件'],
+    ['error', '当前可解析 .txt、.md、.pdf、.docx、.pptx、.xlsx；图片与视频暂未启用'],
     ['error', '文件不能超过 10 MB，请拆分后上传'],
   ])
 })

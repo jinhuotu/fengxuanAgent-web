@@ -8,14 +8,15 @@ import {
 } from '@/api/knowledge'
 import KnowledgeDocumentDrawer from '@/components/KnowledgeDocumentDrawer.vue'
 import KnowledgeTableCard from '@/components/KnowledgeTableCard.vue'
+import KnowledgeUploadPanel from '@/components/KnowledgeUploadPanel.vue'
 import {
   BASE_NOT_FOUND_CODE, DOCUMENT_NOT_FOUND_CODE, knowledgeNotFoundCode, knowledgeRequestMessage, useKnowledgeDeletion,
 } from '@/composables/knowledgeManagement'
-import { KNOWLEDGE_FILE_ACCEPT, useKnowledgeFileUpload } from '@/composables/useKnowledgeFileUpload'
 import type { ApiResponse } from '@/types/api'
 import type { KnowledgeBase, KnowledgeChunk, KnowledgeDocument } from '@/types/knowledge'
 import {
-  countKnowledgeCharacters, documentStatusLabel, formatDocumentCount, formatKnowledgeTime,
+  countKnowledgeCharacters, documentSourceLabel, documentStatusLabel, fileTypeLabel, formatDocumentCount,
+  formatFileSize, formatKnowledgeTime,
 } from '@/utils/knowledgeStatus'
 
 const FIRST_PAGE = 1
@@ -38,10 +39,6 @@ const currentPage = ref(FIRST_PAGE)
 const totalCount = ref(0)
 const loading = ref(false)
 const loadError = ref('')
-const fileInput = ref<HTMLInputElement>()
-const { fileUploading, selectKnowledgeFile } = useKnowledgeFileUpload(
-  () => knowledgeBaseId.value, () => loadDocuments(FIRST_PAGE, true),
-)
 let latestListRequest = 0
 let latestChunkRequest = 0
 const preview = reactive({
@@ -78,11 +75,17 @@ function readKnowledgeBaseId(): number {
   return Number.isSafeInteger(id) && id > 0 ? id : 0
 }
 
-// 做什么：为每行文档预备状态标签
+// 做什么：为每行文档预备状态、来源、类型与大小文案
 // 入参：无，读取已加载的文档
-// 返回：带可读状态和颜色的表格行
+// 返回：带可读标签和颜色的表格行
 function displayDocumentRows() {
-  return documents.value.map((document) => ({ ...document, statusLabel: documentStatusLabel(document.status) }))
+  return documents.value.map((document) => ({
+    ...document,
+    statusLabel: documentStatusLabel(document.status),
+    typeLabel: fileTypeLabel(document.file_type),
+    sourceLabel: documentSourceLabel(document.source_type),
+    sizeText: formatFileSize(document.file_size),
+  }))
 }
 
 // 做什么：检查空白和正文长度，保持提交原文可用
@@ -307,19 +310,22 @@ watch(knowledgeBaseId, openKnowledgeBase, { immediate: true })
       <p v-if="knowledgeBase">{{ formatDocumentCount(knowledgeBase.document_count) }}</p>
     </template>
     <template #actions>
-      <div>
-        <input ref="fileInput" type="file" :accept="KNOWLEDGE_FILE_ACCEPT" hidden @change="selectKnowledgeFile" />
-        <el-button :disabled="!knowledgeBase || loading || uploading || fileUploading" @click="uploadVisible = true">
-          + 上传文档
-        </el-button>
-        <el-button type="primary" class="ink-button" :loading="fileUploading" :disabled="!knowledgeBase || loading || uploading"
-          @click="fileInput?.click()">
-          {{ fileUploading ? '正在上传并解析…' : '上传文件' }}
-        </el-button>
-      </div>
+      <el-button type="primary" class="ink-button" :disabled="!knowledgeBase || loading || uploading"
+        @click="uploadVisible = true">粘贴正文</el-button>
     </template>
+    <KnowledgeUploadPanel :knowledge-base-id="knowledgeBaseId" :disabled="!knowledgeBase || loading || uploading"
+      @uploaded="loadDocuments(FIRST_PAGE, true)" />
     <el-table :data="documentRows" row-key="id" class="data-table" empty-text="这个知识库还没有文档，先上传一篇">
       <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip class-name="is-primary" />
+      <el-table-column label="来源" width="110">
+        <template #default="{ row }">{{ row.sourceLabel }}</template>
+      </el-table-column>
+      <el-table-column label="类型" width="90">
+        <template #default="{ row }">{{ row.typeLabel }}</template>
+      </el-table-column>
+      <el-table-column label="大小" width="100" class-name="is-faint">
+        <template #default="{ row }">{{ row.sizeText }}</template>
+      </el-table-column>
       <el-table-column label="字数" width="100">
         <template #default="{ row }">{{ row.char_count }} 字</template>
       </el-table-column>

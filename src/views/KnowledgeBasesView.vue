@@ -124,30 +124,35 @@ onMounted(loadBases)
   <KnowledgeTableCard :loading="loading" :error="loadError" :current-page="currentPage"
     :page-size="PAGE_SIZE" :total="totalCount" :skeleton="loading && !knowledgeBases.length"
     @retry="loadBases()" @page-change="loadBases">
-    <template #heading><h1>知识库</h1></template>
-    <template #actions>
-      <el-button type="primary" class="ink-button" :disabled="loading || creating" @click="createVisible = true">+ 新建知识库</el-button>
+    <template #heading>
+      <div>
+        <h1>知识库</h1>
+        <p>上传 PDF / Word / PPT / Excel / 文本，或直接粘贴正文；每种文件走各自的分块通道</p>
+      </div>
     </template>
-    <el-table :data="knowledgeBases" row-key="id" class="data-table"
-      empty-text="还没有知识库，点右上角新建一个" @row-click="openDocuments">
-      <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip class-name="is-primary" />
-      <el-table-column label="说明" min-width="200" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.description?.trim() || '未填写' }}</template>
-      </el-table-column>
-      <el-table-column label="文档数" width="100">
-        <template #default="{ row }">{{ formatDocumentCount(row.document_count) }}</template>
-      </el-table-column>
-      <el-table-column label="创建时间" width="170" class-name="is-faint">
-        <template #default="{ row }">{{ formatKnowledgeTime(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="155">
-        <template #default="{ row }">
-          <el-button link type="primary" @click.stop="openDocuments(row)">查看文档</el-button>
-          <el-button link type="danger" :loading="deletingIds.has(row.id)"
-            @click.stop="removeKnowledgeBase(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="base-grid">
+      <article v-for="base in knowledgeBases" :key="base.id" class="base-card" role="button" tabindex="0"
+        @click="openDocuments(base)" @keydown.enter.prevent="openDocuments(base)">
+        <header class="base-head">
+          <span class="base-icon" aria-hidden="true">{{ base.name.slice(0, 1) }}</span>
+          <div class="base-title">
+            <h2>{{ base.name }}</h2>
+            <p>{{ formatKnowledgeTime(base.created_at) }} 创建</p>
+          </div>
+        </header>
+        <p class="base-desc">{{ base.description?.trim() || '未填写说明' }}</p>
+        <footer class="base-foot">
+          <span class="base-tag">可维护</span>
+          <span class="base-tag is-plain">{{ formatDocumentCount(base.document_count) }}</span>
+          <el-button link type="danger" :loading="deletingIds.has(base.id)"
+            @click.stop="removeKnowledgeBase(base)">删除</el-button>
+        </footer>
+      </article>
+      <button type="button" class="base-card is-create" :disabled="loading || creating" @click="createVisible = true">
+        <span class="create-plus" aria-hidden="true">+</span>
+        <span>增加知识库</span>
+      </button>
+    </div>
   </KnowledgeTableCard>
 
   <el-dialog v-model="createVisible" title="新建知识库" width="min(440px, calc(100% - 32px))"
@@ -170,9 +175,116 @@ onMounted(loadBases)
 </template>
 
 <style scoped>
-/* 整行都能点进文档页，鼠标移上去用手形提示 */
-.data-table :deep(.el-table__body tr) {
+.base-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  padding: 4px 0 18px;
+}
+
+.base-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  text-align: left;
   cursor: pointer;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.base-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-card);
+}
+
+.base-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.base-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-control);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.base-title h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.base-title p {
+  margin: 2px 0 0;
+  color: var(--color-text-faint);
+  font-size: 12px;
+}
+
+.base-desc {
+  margin: 0;
+  min-height: 40px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.base-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--color-line);
+  padding-top: 10px;
+}
+
+.base-tag {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 12px;
+}
+
+.base-tag.is-plain {
+  background: var(--color-sidebar);
+  color: var(--color-text-muted);
+}
+
+.base-foot :deep(.el-button) {
+  margin-left: auto;
+}
+
+.base-card.is-create {
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  justify-items: center;
+  border-style: dashed;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.base-card.is-create .create-plus {
+  font-size: 22px;
+  color: var(--color-accent);
+}
+
+.base-card.is-create:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
 }
 
 .form-error {
