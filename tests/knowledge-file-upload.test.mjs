@@ -6,10 +6,11 @@ import * as axios from 'axios'
 import ts from 'typescript'
 import * as vue from 'vue'
 
-const [uploadSource, managementSource, apiSource] = await Promise.all([
+const [uploadSource, managementSource, apiSource, typeSource] = await Promise.all([
   readFile(new URL('../src/composables/useKnowledgeFileUpload.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/composables/knowledgeManagement.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/api/knowledge.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../src/utils/knowledgeFileType.ts', import.meta.url), 'utf8'),
 ])
 
 // 做什么：用真实 TypeScript 实现配合测试替身运行模块
@@ -23,6 +24,8 @@ function loadModule(source, dependencies) {
   return exports
 }
 
+const fileTypeModule = loadModule(typeSource, {})
+
 // 做什么：模拟同页的文件选择、请求与刷新，并记录可见提示
 // 入参：本条测试及可替换的 API 上传函数
 // 返回：选文件方法、上传状态和交互记录
@@ -33,6 +36,7 @@ function uploader(testCase, upload = async () => {}) {
   const management = loadModule(managementSource, { axios, vue, 'element-plus': element })
   const module = loadModule(uploadSource, {
     vue, 'element-plus': element, '@/composables/knowledgeManagement': management,
+    '@/utils/knowledgeFileType': fileTypeModule,
     '@/api/knowledge': { uploadKnowledgeDocumentFile: (id, file) => {
       requests.push({ id, file })
       return upload(id, file)
@@ -82,8 +86,29 @@ test('rejects unsupported types and oversized files before sending', async (test
   assert.deepEqual(requests, [])
   assert.deepEqual(refreshes, [])
   assert.deepEqual(notices, [
-    ['error', '当前可解析 .txt、.md、.pdf、.docx、.pptx、.xlsx；图片与视频暂未启用'],
+    ['error', '当前可解析 .txt、.md、.pdf、.docx、.pptx、.xlsx、.png、.jpg、.jpeg、.mp4、.webm'],
     ['error', '文件不能超过 10 MB，请拆分后上传'],
+  ])
+})
+
+// 做什么：核对新增图片、视频后缀和两档大小限制
+// 入参：上传替身和两个上限附近的文件
+// 返回：有效文件未送出或超限文件送出时断言失败
+test('allows the new image and video extensions with separate size limits', async (testCase) => {
+  const documentBytes = 10 * 1024 * 1024
+  const videoBytes = 200 * 1024 * 1024
+  const { uploadFile, requests, notices } = uploader(testCase)
+  for (const extension of ['PNG', 'jpg', 'jpeg', 'MP4', 'webm']) {
+    const name = `资料.${extension}`
+    const size = ['MP4', 'webm'].includes(extension) ? videoBytes : documentBytes
+    assert.equal(await uploadFile({ name, size }), true)
+  }
+  assert.equal(await uploadFile({ name: '资料.png', size: documentBytes + 1 }), false)
+  assert.equal(await uploadFile({ name: '资料.WEBM', size: videoBytes + 1 }), false)
+  assert.equal(requests.length, 5)
+  assert.deepEqual(notices.slice(5), [
+    ['error', '文件不能超过 10 MB，请拆分后上传'],
+    ['error', '视频文件不能超过 200 MB，请拆分后上传'],
   ])
 })
 
@@ -113,7 +138,9 @@ test('posts the selected file as the multipart file field', async () => {
     return { data: { code: 0, data: document } }
   }
   const http = { __esModule: true, default: { post } }
-  const { uploadKnowledgeDocumentFile } = loadModule(apiSource, { '@/api/http': http })
+  const { uploadKnowledgeDocumentFile } = loadModule(apiSource, {
+    '@/api/http': http, '@/utils/knowledgeFileType': fileTypeModule,
+  })
   const file = new File(['test'], '说明.txt')
   assert.deepEqual(await uploadKnowledgeDocumentFile(14, file), document)
   const [[path, form, config]] = requests
@@ -121,4 +148,22 @@ test('posts the selected file as the multipart file field', async () => {
   assert.equal(form.get('file').name, file.name)
   assert.equal(await form.get('file').text(), 'test')
   assert.ok(config.timeout > 30000)
+  assert.equal(config.timeout, 60000)
+})
+
+// 做什么：验证两种视频均使用十分钟请求时限
+// 入参：上传函数、Axios 替身和大小写混合的视频文件名
+// 返回：每次请求的超时值不等于 600 秒时断言失败
+test('uses a 600-second request timeout for MP4 and WebM', async () => {
+  const timeouts = []
+  const http = { __esModule: true, default: { post: async (_path, _form, config) => {
+    timeouts.push(config.timeout)
+    return { data: { code: 0, data: {} } }
+  } } }
+  const { uploadKnowledgeDocumentFile } = loadModule(apiSource, {
+    '@/api/http': http, '@/utils/knowledgeFileType': fileTypeModule,
+  })
+  await uploadKnowledgeDocumentFile(14, new File(['test'], '说明.MP4'))
+  await uploadKnowledgeDocumentFile(14, new File(['test'], '说明.webm'))
+  assert.deepEqual(timeouts, [600000, 600000])
 })

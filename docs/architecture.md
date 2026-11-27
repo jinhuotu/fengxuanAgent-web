@@ -113,6 +113,6 @@ HomeView 只展示工作台；ChatView、UserManagementView、ChangePasswordView
 
 ## 九、知识库文件上传
 
-知识库文档页保留粘贴正文入口，并提供「上传文件」按钮。浏览器单次选择一个 .txt、.md、.docx 或 .pdf 文件，前端先检查扩展名和 10 MB 上限。
-`useKnowledgeFileUpload.ts` 管理上传中的提示和重复提交，`api/knowledge.ts` 通过 `FormData` 将 `file` 字段发送到 `POST /knowledge-bases/{id}/documents/file`。
+知识库文档页支持单文件选择或拖拽，另有粘贴正文入口。支持 TXT、Markdown、PDF、DOCX、PPTX、XLSX、PNG、JPG、JPEG、MP4 和 WebM。前端按后缀检查大小，视频上限 200 MB，其他文件上限 10 MB。
+`useKnowledgeFileUpload.ts` 管理上传中的提示和重复提交，`api/knowledge.ts` 通过 `FormData` 将 `file` 字段发送到 `POST /knowledge-bases/{id}/documents/file`。视频请求等待 600 秒，其他文件请求等待 60 秒。
 等待解析时按钮显示「正在上传并解析…」。成功后刷新第一页和库的文档数，失败直接显示后端文案。

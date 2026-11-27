@@ -2,6 +2,7 @@
 import http from '@/api/http'
 import type { ApiResponse } from '@/types/api'
 import type { ChatSession } from '@/types/chat'
+import { isVideoFilename } from '@/utils/knowledgeFileType'
 import type {
   KnowledgeBase, KnowledgeBaseCreate, KnowledgeBaseDeleteResult, KnowledgeChunkDetail, KnowledgeChunkPage,
   KnowledgeDocument, KnowledgeDocumentCreate, KnowledgeDocumentDeleteResult, KnowledgeFileType, KnowledgePage,
@@ -16,6 +17,7 @@ const FILE_TYPES_PATH = '/file-types'
 const CHUNKS_PATH = '/chunks'
 const MANAGEMENT_REQUEST = { suppressErrorMessage: true, redirectOnUnauthorized: true }
 const FILE_UPLOAD_TIMEOUT_MS = 60000
+const VIDEO_UPLOAD_TIMEOUT_MS = 600000
 
 // 做什么：分页读取本人可用的知识库
 // 入参：从一开始的页码、每页条数及是否在登录失效时统一跳转
@@ -77,9 +79,10 @@ export async function uploadKnowledgeDocumentFile(id: number, file: File): Promi
   const body = new FormData()
   // 新手注意：FormData 像带标签的信封，浏览器根据字段自动设置 multipart 边界。
   body.append('file', file)
+  const timeout = isVideoFilename(file.name) ? VIDEO_UPLOAD_TIMEOUT_MS : FILE_UPLOAD_TIMEOUT_MS
   const response = await http.post<ApiResponse<KnowledgeDocument>>(
     `${KNOWLEDGE_BASES_PATH}/${id}${DOCUMENTS_PATH}${FILE_PATH}`, body,
-    { ...MANAGEMENT_REQUEST, timeout: FILE_UPLOAD_TIMEOUT_MS },
+    { ...MANAGEMENT_REQUEST, timeout },
   )
   return response.data.data
 }

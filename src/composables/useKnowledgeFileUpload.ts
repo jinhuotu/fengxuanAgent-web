@@ -2,11 +2,15 @@ import { getCurrentScope, ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { uploadKnowledgeDocumentFile } from '@/api/knowledge'
 import { knowledgeRequestMessage } from '@/composables/knowledgeManagement'
+import { isVideoFilename, VIDEO_FILE_EXTENSIONS } from '@/utils/knowledgeFileType'
 
 // 新手注意：这里的后缀必须与后端已启用的通道保持一致，多写会被 415 拒绝。
-const FILE_EXTENSIONS = ['.txt', '.md', '.pdf', '.docx', '.pptx', '.xlsx']
+const FILE_EXTENSIONS = ['.txt', '.md', '.pdf', '.docx', '.pptx', '.xlsx', '.png', '.jpg', '.jpeg', ...VIDEO_FILE_EXTENSIONS]
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024
 const MAX_FILE_BYTES = 10 * 1024 * 1024
-const FILE_TYPE_MESSAGE = '当前可解析 .txt、.md、.pdf、.docx、.pptx、.xlsx；图片与视频暂未启用'
+const FILE_TYPE_MESSAGE = `当前可解析 ${FILE_EXTENSIONS.join('、')}`
+const FILE_SIZE_MESSAGE = '文件不能超过 10 MB，请拆分后上传'
+const VIDEO_SIZE_MESSAGE = '视频文件不能超过 200 MB，请拆分后上传'
 export const KNOWLEDGE_FILE_ACCEPT = FILE_EXTENSIONS.join(',')
 
 interface FileUploadContext {
@@ -21,7 +25,9 @@ interface FileUploadContext {
 function fileValidationError(file: File): string {
   const filename = file.name.toLowerCase()
   if (!FILE_EXTENSIONS.some((extension) => filename.endsWith(extension))) return FILE_TYPE_MESSAGE
-  if (file.size > MAX_FILE_BYTES) return '文件不能超过 10 MB，请拆分后上传'
+  const isVideo = isVideoFilename(filename)
+  const maximumBytes = isVideo ? MAX_VIDEO_BYTES : MAX_FILE_BYTES
+  if (file.size > maximumBytes) return isVideo ? VIDEO_SIZE_MESSAGE : FILE_SIZE_MESSAGE
   return ''
 }
 

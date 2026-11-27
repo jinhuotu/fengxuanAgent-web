@@ -54,7 +54,7 @@ onMounted(loadFileTypes)
       @dragleave.prevent="dragging = false" @drop.prevent="handleDrop">
       <input ref="fileInput" type="file" :accept="KNOWLEDGE_FILE_ACCEPT" hidden @change="selectKnowledgeFile" />
       <p class="drop-title">{{ fileUploading ? '正在上传并解析…' : '把文件拖到这里，或点击选择' }}</p>
-      <p class="drop-hint">单个文件不超过 10 MB；上传后先按内容识别真实类型，再按对应通道解析、分块并写入索引</p>
+      <p class="drop-hint">单个视频不超过 200 MB，其他文件不超过 10 MB。视频解析较慢，请耐心等待</p>
     </div>
 
     <p v-if="typesError" class="types-error">{{ typesError }}</p>
